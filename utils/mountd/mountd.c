@@ -263,7 +263,7 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, int *error, int v3)
 	} else {
 		struct nfs_fh_len  *fh;
 
-		if (!exp->m_exported)
+		if (exp->m_exported<1)
 			export_export(exp);
 		if (!exp->m_xtabent)
 			xtab_append(exp);
@@ -445,6 +445,8 @@ main(int argc, char **argv)
 	sigaction(SIGHUP, &sa, NULL);
 	sigaction(SIGINT, &sa, NULL);
 	sigaction(SIGTERM, &sa, NULL);
+	/* WARNING: the following works on Linux and SysV, but not BSD! */
+	sigaction(SIGCHLD, &sa, NULL);
 
 	if (nfs_version & 0x1)
 		rpc_init("mountd", MOUNTPROG, MOUNTVERS,

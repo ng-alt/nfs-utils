@@ -16,6 +16,7 @@
 #include <syslog.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
@@ -90,7 +91,7 @@ log(int level, char *fmt, ...)
     buffer[1023]=0;
 
     if (level < L_DEBUG) {
-    	syslog(level, buffer);
+    	syslog(level, "%s", buffer);
     }
 
     if (opt_debug) {

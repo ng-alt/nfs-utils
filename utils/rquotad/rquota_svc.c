@@ -20,6 +20,10 @@
  */
 #include "config.h"
 
+#ifdef HAVE_TCP_WRAPPER
+#include "tcpwrapper.h"
+#endif
+
 #include <unistd.h>
 #include <rpc/rpc.h>
 #include "rquota.h"
@@ -30,6 +34,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <syslog.h>
+#include <signal.h>
 
 #ifdef __STDC__
 #define SIG_PF void(*)(int)
@@ -58,6 +63,15 @@ static void rquotaprog_1(struct svc_req *rqstp, register SVCXPRT *transp)
    char *result;
    xdrproc_t xdr_argument, xdr_result;
    char *(*local)(char *, struct svc_req *);
+
+#ifdef HAVE_TCP_WRAPPER
+   /* remote host authorization check */
+   if (!check_default("rquotad", svc_getcaller(transp),
+		      rqstp->rq_proc, RQUOTAPROG)) {
+         svcerr_auth (transp, AUTH_FAILED);
+         return;
+   }
+#endif
 
    /*
     * Don't bother authentication for NULLPROC.
@@ -125,6 +139,15 @@ static void rquotaprog_2(struct svc_req *rqstp, register SVCXPRT *transp)
    xdrproc_t xdr_argument, xdr_result;
    char *(*local)(char *, struct svc_req *);
 
+#ifdef HAVE_TCP_WRAPPER
+   /* remote host authorization check */
+   if (!check_default("rquotad", svc_getcaller(transp),
+		      rqstp->rq_proc, RQUOTAPROG)) {
+         svcerr_auth (transp, AUTH_FAILED);
+         return;
+   }
+#endif
+
    /*
     * Don't bother authentication for NULLPROC.
     */
@@ -189,6 +212,9 @@ int main(int argc, char **argv)
    (void) pmap_unset(RQUOTAPROG, EXT_RQUOTAVERS);
 
    openlog("rquota", LOG_PID, LOG_DAEMON);
+
+   /* WARNING: the following works on Linux and SysV, but not BSD! */
+   signal(SIGCHLD, SIG_IGN);
 
    transp = svcudp_create(RPC_ANYSOCK);
    if (transp == NULL) {

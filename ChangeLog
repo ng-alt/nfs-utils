@@ -1,3 +1,177 @@
+2000-09-01  H.J. Lu <hjl@lucon.org>
+
+	* README: Updated for 0.2.
+
+2000-09-01  Jay Weber <jweber@valinux.com>
+
+	* etc/redhat/nfs.init: Added ability for rpc.mountd to default to
+	supporting version 3 of nfs if available, else it will fall back to
+	version 2 support only.
+
+2000-08-30  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.2".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-08-25  H.J. Lu <hjl@lucon.org>
+
+	* support/misc/tcpwrapper.c (logit): Modify the log output.
+
+2000-08-25  Ion Badulescu  <ionut@cs.columbia.edu>
+
+ 	* utils/rquotad/rquotad.man, utils/statd/statd.man,
+	utils/mountd/mountd.man: updated
+        
+	* utils/mountd/Makefile (LIBS): added -lmisc $(LIBWRAP) $(LIBNSL)
+	* utils/rquotad/Makefile: fix comment
+
+	* support/misc/tcpwrapper.c (logit): added comment about waiting
+	for the children after fork()
+	
+	* utils/mountd/mountd.c (main): ignore SIGCHLD to prevent leaving
+	zombies behind (from logit()'s fork)
+	* utils/rquotad/rquota_svc.c (main): ditto
+	* utils/statd/statd.c (main): ditto
+
+	* utils/rquotad/rquota_svc.c (rquotaprog_1): pass RQUOTAPROG
+	to check_default instead of 0, for prognum
+
+	* utils/statd/statd.c (sm_prog_1_wrapper): pass SM_PROG
+	to check_default instead of 0, for prognum
+
+	* utils/mountd/mount_dispatch.c: Include "tcpwrapper.h" if
+	HAVE_TCP_WRAPPER is defined.
+	(mount_dispatch): Call check_default () if HAVE_TCP_WRAPPER is
+	defined. Reject an RPC call if check_default () fails.
+
+2000-08-25  H.J. Lu <hjl@lucon.org>
+
+	* support/include/tcpwrapper.h: New for the tcp wrapper
+	support.
+	* support/misc/Makefile: Likewise.
+	* support/misc/from_local.c: Likewise.
+	* support/misc/tcpwrapper.c: Likewise.
+
+	* aclocal.m4 (AC_TCP_WRAPPER): New.
+	* configure.in: Use it. Substitute LIBWRAP.
+	* configure: Rebuilt.
+
+	* config.mk.in (LIBNSL): New.
+	(LIBWRAP): Likewise.
+
+	* support/Makefile (SUBDIRS): Add misc.
+
+	* support/lib/Makefile (LIBS): Add libmisc.a.
+
+	* utils/rquotad/Makefile (LIBS): Add
+	
+		-lmisc $(LIBWRAP) $(LIBNSL)
+
+	* utils/statd/Makefile (LIBS): Likewise.
+
+	* utils/rquotad/rquota_svc.c: Include "tcpwrapper.h" if
+	HAVE_TCP_WRAPPER is defined.
+	(rquotaprog_1): Call check_default () if HAVE_TCP_WRAPPER is
+	defined. Reject an RPC call if check_default () fails.
+
+	* utils/statd/statd.c: Include "tcpwrapper.h" if
+	HAVE_TCP_WRAPPER is defined.
+	(sm_prog_1_wrapper): New. A wrapper for sm_prog_1. Call
+	check_default () before calling sm_prog_1 (). Define it as
+	sm_prog_1_wrapper if HAVE_TCP_WRAPPER is defined.
+
+2000-08-25  Chip Salzenberg  <chip@valinux.com>
+
+	* debian/*: Complete Debian build support.
+	* etc/debian/*: Remove.
+
+2000-08-24  Neil Brown <neilb@cse.unsw.edu.au>
+
+	* support/export/client.c(client_check): removed the "dot+1" as a
+	  ypdomain argument to innetgr as this is entirely bogus.
+	  It should always be NULL.
+	
+2000-08-23  Neil Brown <neilb@cse.unsw.edu.au>
+
+	* support/export/xtab.c(xtab_read): introduce new mode for
+	   reading xtab. i.e. a list of exports that might be known to the
+	   kernel, or might not.  These are flagged as m_exported == -1
+	* support/export/xtab.c(xtab_mount_read):  call xtab_read with new
+	   value "2" for xtab, meaning don't trust this too much.
+	* support/include/exportfs.h(struct mexport): changed m_exported
+	   from one bit to an int so that it can hold new value
+	* utils/exportfs/exportfs.c(exportfs_ipdate): add an export to the
+	   kernel if it is uncertain whether the kernel knows (m_exported == -1)
+	* utils/mountd/mountd.c(get_rootfh): similarly export to kernel if
+	   status is uncertain
+
+	* support/nfs/xio.c(xflock): added O_CREAT when getting
+	   a write lock so that missing files aren't fatal.
+
+	* etc/debian/nfs-common: new file from "potato"
+	* etc/debian/nfs-kernel-server: new file from "potato" plus fixes.
+	 
+2000-08-09  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Run /usr/sbin/exportfs first during
+	startup to ensure all existing clients work fine.
+
+	* support/export/xtab.c (xtab_mount_read): Pass 1 instead of 0
+	to xtab_read () for reading _PATH_XTAB.
+
+2000-08-02  H.J. Lu <hjl@lucon.org>
+
+	* utils/mountd/auth.c (auth_authenticate_internal): Try to
+	avoid the reverse name lookup.
+
+2000-07-04  H.J. Lu <hjl@lucon.org>
+
+	* utils/statd/log.c: Include <stdlib.h> for exit ().
+
+	* utils/statd/misc.c (xunlink): Add `{' and `}' to quiet the
+	gcc warning.
+
+2000-07-04  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.9.1".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+2000-07-04  Neil Brown  <neilb@cse.unsw.edu.au>
+
+	* support/export/hostname.c (hostent_dup): Handle the NULL
+	h_aliases field.
+
+2000-07-03  H.J. Lu <hjl@lucon.org>
+
+	* README: Update the util-linux requirement.
+
+2000-07-03  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.9".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+2000-07-03  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Run /usr/sbin/exportfs last during
+	stop to ensure all clients can still access the server
+	before it is shutdown.
+
+2000-06-30  Jeff Uphoff <juphoff@transmeta.com>
+
+	* tools/rpcgen/rpc_svcout.c (write_msg_out): Generate syslog()
+ 	calls with format string.
+	
+2000-06-28  Chip Salzenberg  <chip@valinux.com>
+
+	* utils/statd/log.c (log): Call syslog with format string.
+
 2000-06-27  H.J. Lu <hjl@lucon.org>
 
 	* utils/statd/statd.c (main): Use sysconf (_SC_OPEN_MAX)
@@ -10,7 +184,7 @@
 2000-06-27  H.J. Lu <hjl@lucon.org>
 
 	* etc/redhat/nfs.init: Run /usr/sbin/exportfs last during
-	startup to ensure all exiting clients are exported.
+	startup to ensure all existing clients are exported.
 
 	* configure.in (VERSION): Set to "0.1.8.2".
 	* configure: Regenerated.

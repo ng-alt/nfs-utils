@@ -4,7 +4,7 @@ AC_INIT(rules.mk)
 AC_PREFIX_DEFAULT(/usr)
 
 # The nfs-utils version
-VERSION="0.1.8.2"
+VERSION="0.2"
 AC_SUBST(VERSION)
 
 dnl *************************************************************
@@ -63,6 +63,9 @@ AC_SUBST(LIBSOCKET)
 AC_SUBST(LIBNSL)
 AC_SUBST(LIBCRYPT)
 AC_SUBST(LIBBSD)
+
+AC_TCP_WRAPPER
+AC_SUBST(LIBWRAP)
 
 dnl *************************************************************
 dnl Check for headers
