@@ -1,3 +1,308 @@
+2001-09-24  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.3.3".
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+	* README: Updated for 0.3.3.
+
+2001-09-20 NeilBrown <neilb@cse.unsw.edu.au>
+
+	Arrange that "exportfs -au" never does DNS lookup:
+	
+	* support/export/client.c (client_lookup) : add "canonical"
+	flag which says that the hostname is known to be canonical, so
+	don't do a lookup
+
+	* support/export/export.c (export_create) : add "canonical"
+	flag to be passed down to client_lookup
+	* support/export/export.c (export_lookup) : Likewise
+
+	* support/export/xtab.c (xtab_read) : pass appropriate
+	"canonical" flag to export_lookup and export_create:
+	set if reading list of filesystems currently exports
+	(is_export != 1). 
+
+	* support/export/export.c (export_read) : pass 0 as 
+	"canonical" flag to export_lookup and export_create
+	* support/export/rmtab.s (rmtab_read) : Likewise
+
+	* support/include/exportfs.h : redeclare various routines
+	to have "canonical" flag
+
+	* utils/exportfs/exportfs.c (main) : redo logic for 
+	"-au" to read in what is currently exported, but never even 
+	look at what "should" be exported.
+
+	* utils/exportfs/exportfs.c (unexportall) : remove this
+	routine. Functionality is completely included in
+	exports_update
+
+	* utils/exportfs/exportfs.c (exportfs) : set "canonical"
+	flag to zero in calls to export_lookup and export_create.
+
+	
+2001-09-20 NeilBrown <neilb@cse.unsw.edu.au>
+	    Anne Milicia <milicia@missioncriticallinux.com>
+
+	* support/export/client.c (client_lookup) call gethostbyadd
+	to make sure that we have a canonical hostname, even for
+	dotted-quads
+	* utils/exportfs/exportfs.c (exportfs) Likewise
+	
+2001-09-12 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/nfs/exports.c (putexportent): \octal quote any spaces
+	etc in a path name
+	* support/nfs/xio.c (xgettok): recognise double-quote and
+	\octal quoting in path names
+	* utils/exportfs/exports.man: document quoting conventions
+	for path names
+	
+2001-09-12 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/auth.c (auth_authenticate_internal): Reverse
+	  change from 2000-08-02:  It causes problems if someone exports
+	  to both a hostname and IP addresses.  nfs-utils must be
+	  consistant about the canonical name that it chooses.
+
+2001-08-17  Ragnar Kjørstad <nfs@ragnark.vestdata.no>
+	    H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfslock.init (STATDARG): New. Pass it to rpc.statd.
+
+	* utils/statd/statd.c (longopts): Add "name".
+	(usage): Add "-n/--name".
+	(main): Set MY_NAME with "-n/--name".
+
+	* utils/statd/state.c (change_state): Set MY_NAME only if it
+	is NULL.
+	
+	* utils/statd/statd.man: Updated for "-n/--name".
+
+2001-07-26  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec (Release): Set to 8.
+
+2001-07-25  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Check if rpc.rquotad exists before doing
+	anything about it.
+
+2001-06-27  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Run rpc.rquotad only if it exists.
+
+2001-06-27  H.J. Lu <hjl@lucon.org>
+
+	* utils/rquotad/rquota_server.c: Don't call statfs () for
+	the block size. Use BLOCK_SIZE instead.
+
+2001-06-27  H.J. Lu <hjl@lucon.org>
+
+	* config.mk.in (CC_FOR_BUILD): Renamed from BUILD_CC.
+	(CFLAGS_FOR_BUILD): New. Don't use @CFLAGS@.
+
+	* configure.in (enable_nfsv3): Set to yes by default.
+	(--enable-rquotad): Added
+	(AC_PROG_CXX): Removed.
+	(AC_OUTPUT): Add utils/Makefile.
+	(CC_FOR_BUILD): Renamed from BUILD_CC.
+	* configure: Regenerated.
+
+	* utils/Makefile: Removed.
+
+	* utils/Makefile.in: New.
+
+	* nfs-utils.spec.in (rquotad): New. Set to 0 to disable
+	rquotad.
+	(CC_FOR_BUILD): Renamed from BUILD_CC.
+	* nfs-utils.spec: Regenerated.
+
+2001-06-15  Chip Salzenberg  <chip@debian.org>
+
+	* debian/changelog: Version 0.3.2-2.
+	* debian/*.init: Minor fixes.
+
+2001-06-07  Lon H. Hohberger <hohberger@missioncriticallinux.com>
+
+	* etc/nodist/nfs-server: Fixed a bug where the script would
+	disable mounts from NFSv3 clients if NFSv3 is present.
+
+2001-06-05  H.J. Lu <hjl@lucon.org>
+
+	* utils/mountd/mountd.c (longopts): Add "descriptors/o".
+	(main): Support --descriptors/-o to set the limit of the number
+	of open file descriptors.
+	(usage): Updated.
+
+	* utils/mountd/mountd.man: Updated for --descriptors/-o.
+
+2001-06-04  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec (Release): Set to 6.
+
+2001-05-28  H.J. Lu <hjl@lucon.org>
+
+	* utils/lockd/lockd.c (main): chdir to NFS_STATEDIR.
+	* utils/mountd/mountd.c (main): Likewise.
+	* utils/nfsd/nfsd.c (main): Likewise.
+	* utils/rquotad/rquota_svc.c (main): Likewise.
+
+2001-05-06  Anne Milicia <milicia@missioncriticallinux.com>
+
+	* support/export/client.c (client_check): Check IP address
+	againet netgroup.
+
+2001-05-06  Neil Brown <neilb@cse.unsw.edu.au>
+
+	* support/export/client.c (client_gettype): Treat `*' as
+	MCL_ANONYMOUS.
+
+2001-04-22  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec.in: Fix a typo.
+	* nfs-utils.spec: Regenerated.
+
+2001-04-21  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec.in: Fix cross build.
+	* nfs-utils.spec: Regenerated.
+	(Release): Set to 5.
+
+2001-04-18  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec.in: Support cross build.
+	* nfs-utils.spec: Regenerated.
+	(Release): Set to 4.
+
+	* config.sub: New.
+	* config.guess: New.
+
+	* config.mk.in (BUILD_CC): New.
+	(CC): Set to $(BUILD_CC) if BUILD is defined.
+	(AR): Set to @AR@.
+	(LD): Set to @LD@.
+	(RANLIB): Set to @RANLIB@.
+
+	* configure.in: Check BUILD_CC, RANLIB, AR and LD.
+	* configure: Regenerated.
+
+	* tools/rpcgen/Makefile (BUILD): Set to true.
+
+2001-04-01  Chip Salzenberg  <chip@valinux.com>
+
+	* tools/rpcgen/rpc_svcout.c (write_timeout_func): Remove
+	redundant, and sometimes broken, declaration of svc_fdset;
+	it may be a macro.
+	* support/nfs/rpcmisc.c (closedown): Likewise.
+	
+2001-03-21  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec: Regenerated.
+	(Release): Set to 3.
+
+2001-03-21  Ion Badulescu  <ionut@cs.columbia.edu>
+
+	* utils/statd/statd.c (main): make sure file descriptors 0-2
+	are open to /dev/null.
+
+2001-03-21  H.J. Lu <hjl@lucon.org>
+
+	* support/nfs/rpcmisc.c: Restore the change made on 2001-03-10.
+	* support/nfs/rpcmisc.c: Likewise.
+	* utils/rquotad/rquota_svc.c: Likewise.
+	* utils/rquotad/rquotad.man: Likewise.
+	* utils/statd/Makefile: Likewise.
+	* utils/statd/rmtcall.c: Likewise.
+	* utils/statd/simulate.c: Likewise.
+	* utils/statd/statd.c: Likewise.
+	* utils/statd/statd.man: Likewise.
+
+2001-03-11  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (RELEASE): New. Default to 1, set by
+	--with-release=XXX. Substitute nfs-utils.spec.
+	* nfs-utils.spec.in (Release): Set to @RELEASE@.
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+2001-03-11  H.J. Lu <hjl@lucon.org>
+
+	* utils/rquotad/rquotad.man: Fix a typo.
+
+2001-03-11  H.J. Lu <hjl@lucon.org>
+
+	* support/include/rpcmisc.h: Undo the change made on 2001-03-10.
+	* support/nfs/rpcmisc.c: Likewise.
+	* utils/rquotad/rquota_svc.c: Likewise.
+	* utils/rquotad/rquotad.man: Likewise.
+	* utils/statd/Makefile: Likewise.
+	* utils/statd/rmtcall.c: Likewise.
+	* utils/statd/simulate.c: Likewise.
+	* utils/statd/statd.c: Likewise.
+	* utils/statd/statd.man: Likewise.
+
+2001-03-10  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.3.2".
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+	* README: Updated for 0.3.2.
+
+2001-03-10  Tavis Barr <tavis@boole.isetr.columbia.edu>
+
+	* utils/rquotad/rquotad.man: Updated for -p.
+	* utils/statd/statd.man: Likewise.
+
+2001-03-10  Ion Badulescu  <ionut@cs.columbia.edu>
+
+	* support/nfs/rpcmisc.c: export makesock()
+
+	* support/include/rpcmisc.h (makesock): Declared.
+
+	* utils/rquotad/rquota_svc.c: added longopts, added support for
+	specifying the port to bind to on the command line.
+
+	* utils/statd/statd.c: ditto, also specify port used for
+	outgoing connections.
+	(do_regist): Removed.
+
+	* utils/statd/rmtcall.c (statd_get_socket): Renamed from
+	get_socket. Make it extern.
+
+	* utils/statd/simulate.c (daemon_simulator): Call rpc_init
+	instead of do_regist.
+
+	* utils/statd/Makefile (LIBS): link with our own libnfs
+
+2001-03-09  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfslock.init: Changed chkconfig line to 60 86.
+	* etc/nodist/nfs-client: Likewise.
+
+2001-02-26  Chip Salzenberg  <chip@valinux.com>
+
+	* debian/changelog: Version 0.3.1-1.
+	* Mention upstream source and license in copyright file.
+	* Add build-Depends for debhelper and libwrap0-dev.
+
+2001-02-20  Lon Hohberger <hohberger@missioncriticallinux.com>
+
+	* etc/nodist/nfs-server: Changed chkconfig line to 60 20
+	* etc/nodist/nfs-client: Likewise.
+
+2001-02-18  Lon Hohberger <hohberger@missioncriticallinux.com>
+
+	* utils/statd/statd.man: Changed /usr/sbin/rpc.statd to
+	/sbin/rpc.statd.
+
+2001-02-17  Patrick J. LoPresti <patl@curl.com>
+
+	* utils/statd/log.c (log_init): Use LOG_DAEMON instead of
+	LOG_LOCAL5.
+
 2001-02-14  H.J. Lu <hjl@lucon.org>
 
 	* utils/statd/rmtcall.c: Include <time.h>.
@@ -177,7 +482,7 @@
 	* utils/mountd/auth.c (auth_authenticate_internal): Make sure a
 	non-NULL hostent is always returned.
 
-2000-09-11  Ion Badulescu  <ionut@moisil.dev.hydraweb.com>
+2000-09-11  Ion Badulescu  <ionut@cs.columbia.edu>
 
 	* etc/redhat/nfslock.init: don't kill lockd processes that do not
 	have an executable (i.e. kernel threads)
@@ -204,7 +509,7 @@
 
 2000-08-25  Ion Badulescu  <ionut@cs.columbia.edu>
 
- 	* utils/rquotad/rquotad.man, utils/statd/statd.man,
+	* utils/rquotad/rquotad.man, utils/statd/statd.man,
 	utils/mountd/mountd.man: updated
         
 	* utils/mountd/Makefile (LIBS): added -lmisc $(LIBWRAP) $(LIBNSL)

@@ -32,8 +32,12 @@ static int	client_checkaddr(nfs_client *clp, struct in_addr addr);
 nfs_client	*clientlist[MCL_MAXTYPES] = { NULL, };
 
 
+/* if canonical is set, then we *know* this is already a canonical name
+ * so hostname lookup is avoided.
+ * This is used when reading /proc/fs/nfs/exports
+ */
 nfs_client *
-client_lookup(char *hname)
+client_lookup(char *hname, int canonical)
 {
 	nfs_client	*clp = NULL;
 	int		htype;
@@ -41,13 +45,23 @@ client_lookup(char *hname)
 
 	htype = client_gettype(hname);
 
-	if (htype == MCL_FQDN) {
+	if (htype == MCL_FQDN && !canonical) {
+		struct hostent *hp2;
 		hp = gethostbyname(hname);
 		if (hp == NULL || hp->h_addrtype != AF_INET) {
 			xlog(L_ERROR, "%s has non-inet addr", hname);
 			return NULL;
 		}
-		hp = hostent_dup (hp);
+		/* make sure we have canonical name */
+		hp2 = hostent_dup(hp);
+		hp = gethostbyaddr(hp2->h_addr, hp2->h_length,
+				   hp2->h_addrtype);
+		if (hp) {
+			free(hp2);
+			hp = hostent_dup(hp);
+		} else
+			hp = hp2;
+
 		hname = (char *) hp->h_name;
 
 		for (clp = clientlist[htype]; clp; clp = clp->m_next) {
@@ -239,11 +253,22 @@ client_check(nfs_client *clp, struct hostent *hp)
 		{
 			char	*dot;
 			int	match;
+			struct hostent *nhp = NULL;
+			struct sockaddr_in addr;
 
 			/* First, try to match the hostname without
 			 * splitting off the domain */
 			if (innetgr(cname+1, hname, NULL, NULL))
 				return 1;
+
+			/* If hname is ip address convert to FQDN */
+			if (inet_aton(hname, &addr.sin_addr) &&
+			   (nhp = gethostbyaddr((const char *)&(addr.sin_addr),
+			    sizeof(addr.sin_addr), AF_INET))) {
+				hname = (char *)nhp->h_name;
+				if (innetgr(cname+1, hname, NULL, NULL))
+					return 1;
+			}
 
 			/* Okay, strip off the domain (if we have one) */
 			if ((dot = strchr(hname, '.')) == NULL)
@@ -291,7 +316,7 @@ client_gettype(char *ident)
 {
 	char	*sp;
 
-	if (ident[0] == '\0')
+	if (ident[0] == '\0' || strcmp(ident, "*")==0)
 		return MCL_ANONYMOUS;
 	if (ident[0] == '@') {
 #ifndef HAVE_INNETGR

@@ -1,3 +1,33 @@
+nfs-utils (1:0.3.2-2) unstable; urgency=low
+
+  * Rebuild with new libc.  (closes: #97252, #97455, #99829, #100317)
+  * Fix typo in nfs-kernel-server init script.  (closes: #100380)
+  * Start all daemons in root directory.
+  
+ -- Chip Salzenberg <chip@debian.org>  Fri, 15 Jun 2001 15:57:18 -0700
+
+nfs-utils (1:0.3.2-1) unstable; urgency=low
+
+  * Upstream changes to statd:
+    > Recognize long options.
+    > On startup, close std{in,out,err}.
+    > Updated man page.
+  * Let debhelper handle doc symlinks.  (closes: #74094)
+  * Rename upstream changelog, per policy.
+  * Get rid of suidregister call.
+
+ -- Chip Salzenberg <chip@debian.org>  Sun,  1 Apr 2001 19:21:26 -0700
+
+nfs-utils (1:0.3.1-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Incorporate (but not all) Bug Party changes by David LaBissoniere
+    <labiss@usit.net>:
+    > Mention upstream source and license in copyright file.  (closes: #79997)
+    > Add Build-Depends for debhelper and libwrap0-dev.  (closes: #84131)
+
+ -- Chip Salzenberg <chip@debian.org>  Mon, 26 Feb 2001 16:51:15 -0800
+
 nfs-utils (1:0.3-2) unstable; urgency=low
 
   * Upstream:

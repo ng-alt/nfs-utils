@@ -1,9 +1,12 @@
+%define rquotad 0
+%{?do_rquotad:%define rquotad 1}
+
 # We don't use libtool. 
 %define __libtoolize :
 
 Summary: NFS utlilities and supporting daemons for the kernel NFS server.
 Name: nfs-utils
-Version: 0.3.1
+Version: 0.3.3
 Release: 1
 Source0: ftp://nfs.sourceforge.net/pub/nfs/%{name}-%{version}.tar.gz
 Group: System Environment/Daemons
@@ -35,7 +38,14 @@ clients which are mounted on that host.
 %setup -q
 
 %build
-%configure
+CC=%{__cc}; export CC
+CC_FOR_BUILD=gcc; export CC_FOR_BUILD
+%configure \
+%if !%{rquotad}
+	--disable-rquotad \
+%endif
+	--build=%{_build_alias}
+
 make all
 
 %install
@@ -88,7 +98,9 @@ fi
 /usr/sbin/nhfsstone
 /usr/sbin/rpc.mountd
 /usr/sbin/rpc.nfsd
+%if %{rquotad}
 /usr/sbin/rpc.rquotad
+%endif
 /usr/sbin/showmount
 %{_mandir}/man?/*
 %config /etc/rc.d/init.d/nfslock
