@@ -50,11 +50,10 @@ rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport)
 
 	asize = sizeof(saddr);
 	sock = 0;
-	if (getsockname(0, (struct sockaddr *) &saddr, &asize) == 0) {
+	if (getsockname(0, (struct sockaddr *) &saddr, &asize) == 0
+	    && saddr.sin_family == AF_INET) {
 		int ssize = sizeof (int);
 		_rpcfdtype = 0;
-		if (saddr.sin_family != AF_INET)
-			xlog(L_FATAL, "init: stdin is bound to non-inet addr");
 		if (getsockopt(0, SOL_SOCKET, SO_TYPE,
 				(char *)&_rpcfdtype, &ssize) == -1)
 			xlog(L_FATAL, "getsockopt failed: %s", strerror(errno));
@@ -67,17 +66,21 @@ rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport)
 	if ((_rpcfdtype == 0) || (_rpcfdtype == SOCK_DGRAM)) {
 		static SVCXPRT *last_transp = NULL;
  
-		if (_rpcfdtype == 0) {
+		if (_rpcpmstart == 0) {
 			if (last_transp
 			    && (!defport || defport == last_transp->xp_port)) {
 				transp = last_transp;
 				goto udp_transport;
 			}
-			if ((sock = makesock(defport, IPPROTO_UDP)) < 0) {
+			if (defport == 0)
+				sock = RPC_ANYSOCK;
+			else if ((sock = makesock(defport, IPPROTO_UDP)) < 0) {
 				xlog(L_FATAL, "%s: cannot make a UDP socket\n",
 						name);
 			}
 		}
+		if (sock == RPC_ANYSOCK)
+			sock = svcudp_socket (prog, 1);
 		transp = svcudp_create(sock);
 		if (transp == NULL) {
 			xlog(L_FATAL, "cannot create udp service.");
@@ -93,17 +96,21 @@ rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport)
 	if ((_rpcfdtype == 0) || (_rpcfdtype == SOCK_STREAM)) {
 		static SVCXPRT *last_transp = NULL;
 
-		if (_rpcfdtype == 0) {
+		if (_rpcpmstart == 0) {
 			if (last_transp
 			    && (!defport || defport == last_transp->xp_port)) {
 				transp = last_transp;
 				goto tcp_transport;
 			}
-			if ((sock = makesock(defport, IPPROTO_TCP)) < 0) {
+			if (defport == 0)
+				sock = RPC_ANYSOCK;
+			else if ((sock = makesock(defport, IPPROTO_TCP)) < 0) {
 				xlog(L_FATAL, "%s: cannot make a TCP socket\n",
 						name);
 			}
 		}
+		if (sock == RPC_ANYSOCK)
+			sock = svctcp_socket (prog, 1);
 		transp = svctcp_create(sock, 0, 0);
 		if (transp == NULL) {
 			xlog(L_FATAL, "cannot create tcp service.");

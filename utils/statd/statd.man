@@ -2,9 +2,9 @@
 .\" statd(8)
 .\"
 .\" Copyright (C) 1999 Olaf Kirch <okir@monad.swb.de>
-.\" Modified by Jeffrey A. Uphoff, 1999.
+.\" Modified by Jeffrey A. Uphoff, 1999, 2002.
 .\" Modified by Lon Hohberger, 2000.
-.TH rpc.statd 8 "08 Mar 2001"
+.TH rpc.statd 8 "16 Sep 2002"
 .SH NAME
 rpc.statd \- NSM status monitor
 .SH SYNOPSIS
@@ -89,6 +89,18 @@ a standard port number that
 always or usually assigns.  Specifying
 a port may be useful when implementing a firewall.
 .TP
+.BI "\-P," "" " \-\-state\-directory\-path "  directory
+specify a directory in which to place statd state information.
+If this option is not specified the default of 
+.BR /var/lib/nfs
+is used.
+.TP
+.B -N
+Causes statd to run in the notify-only mode. When started in this mode, the
+statd program will check its state directory, send notifications to any
+monitored nodes, and exit once the notifications have been sent. This mode is
+used to enable Highly Available NFS implementations (i.e. HA-NFS).
+.TP
 .B -?
 Causes
 .B rpc.statd
@@ -134,7 +146,7 @@ manual pages.
 .BR portmap(8)
 .SH AUTHORS
 .br
-Jeff Uphoff <juphoff@transmeta.com>
+Jeff Uphoff <juphoff@nrao.edu>
 .br
 Olaf Kirch <okir@monad.swb.de>
 .br

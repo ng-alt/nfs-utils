@@ -14,13 +14,23 @@
  * Paths and filenames.
  */
 #if defined(NFS_STATEDIR)
-# define DIR_BASE	NFS_STATEDIR "/"
+# define DEFAULT_DIR_BASE	NFS_STATEDIR "/"
 #else
-# define DIR_BASE	"/var/lib/nfs/"
+# define DEFAULT_DIR_BASE	"/var/lib/nfs/"
 #endif
-#define SM_DIR		DIR_BASE "sm"
-#define SM_BAK_DIR	DIR_BASE "sm.bak"
-#define SM_STAT_PATH	DIR_BASE "state"
+
+#define DEFAULT_SM_DIR		DEFAULT_DIR_BASE "sm"
+#define DEFAULT_SM_BAK_DIR	DEFAULT_DIR_BASE "sm.bak"
+#define DEFAULT_SM_STAT_PATH	DEFAULT_DIR_BASE "state"
+
+/* Added to support run-time specification of state directory path.
+ * j_carlos_gomez@yahoo.com
+ */
+
+extern char * DIR_BASE;
+extern char *  SM_DIR;
+extern char *  SM_BAK_DIR;
+extern char *  SM_STAT_PATH;
 
 /*
  * Status definitions.
@@ -63,7 +73,7 @@ stat_chge		SM_stat_chge;
 extern int run_mode;
 #define MODE_NODAEMON 1		/* No-daemon/foreground mode. */
 #define MODE_LOG_STDERR 2	/* in foreground mode, log to stderr */
-/*#define MODE_NOTIFY_ONLY 4*/	/* Send SM_NOTIFY to everyone monitored on
+#define MODE_NOTIFY_ONLY 4	/* Send SM_NOTIFY to everyone monitored on
 				   a single interface/alias */
 /* LH - notify_only mode would be for notifying hosts on an IP alias
  * that just came back up, for ex, when failing over a HA service to

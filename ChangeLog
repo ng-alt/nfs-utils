@@ -1,3 +1,171 @@
+2003-03-26  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 1.0.3-1.
+
+2003-03-26 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/rmtab.c (slink_safe_rename): real_newpath should be
+	"const char*", not "char*".
+
+2003-03-26 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* configure.in (VERSION): Set to "1.0.3".
+	* nfs-utils.spec: Likewise.
+	* configure: Regenerated.
+
+2003-03-26 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/nfs/cacheio.c: New File - support for read/writing
+	to export cache in /proc/rpc/*/channel
+	* support/nfs/Makefile: compile cacheio.c
+	* support/include/nfslib.h: declare cacheio.c functions
+	* support/nfs/nfsexport.c: export and unexport through
+	/proc/rpc/*/channel if possible, as old syscall interface
+	may not survive into 2.6 on all architectures.
+	
+2003-02-19 NeilBrown <neilb@cse.unsw.edu.au>	
+	Ben Leslie <benno@sesgroup.net>
+
+	* support/nfs/rpcmisc.c(rpc_init):  change test for ignoring
+	"defport" from (__rpcfdtype == 0) to (__rpcpmstart==0).  The
+	former would incorectly ignore defport if the application 
+	explicitly set __rpcfdtype.  The later is sufficient to avoid the
+	special handling in the case where stdin is an internet socket.
+
+	* utils/mountd/mountd.c(main): Add 'n' to option list in
+	getopt_long as this is a short form of --no-tcp which want being
+	checked.
+	
+2003-02-12  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 1.0.2-2.
+
+2002-11-27  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/mountd/rmtab.c (slink_safe_rename): Fix off-by-one buffer
+	overflow bug.  Reformat per rest of source file.
+
+2002-11-19  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/exportfs/exports.man: Correct notes about whether the wild
+	card characters match a period.  They do.
+	
+2002-10-15  Juan Gomez <juang@us.ibm.com>
+
+	* utils/mountd/rmtab.c (slink_safe_rename): New. Support
+	symlink.
+	(mountlist_add): Call slink_safe_rename instead of rename.
+
+2002-10-11  H.J. Lu <hjl@lucon.org>
+
+	* support/include/exportfs.h (export_errno): New.
+
+	* support/nfs/exports.c: Include <errno.h>.
+	(export_errno): New.
+	(getexportent): Set export_errno to EINVAL for bad option.
+	(parseopts): Likewise.
+	Report the location of the default sync/async option.
+
+	* utils/exportfs/exportfs.c (main): Initialize export_errno to
+	0. Return export_errno.
+
+2002-10-11  Juan Gomez  <gomez@cs.sjsu.edu>
+	NeilBrown <neilb@cse.unsw.edu.au>
+
+	utils/statd/statd.c(killer): don't pmap_unset if in notify_only mode
+	utils/statd/statd.c(main): don't pmap_unset if in notify_only mode
+	
+2002-09-16  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/rquotad/rquota_svc.c (main): Use int for value of getopt.
+
+2002-09-15  Chip Salzenberg  <chip@pobox.com>
+
+	* support/nfs/rpcmisc.c (rpc_init): Allow stdin to be a non-INET
+	socket, as occurs when run from sshd.
+	* debian/changelog: Version 1.0.2-1.
+
+2002-09-12  H.J. Lu <hjl@lucon.org>
+
+	* support/nfs/svc_socket.c: Remove HAVE_SVCTCP_SOCKET and
+	HAVE_SVCUDP_SOCKET.
+
+2002-09-12  H.J. Lu <hjl@lucon.org>
+
+	* configure.in: Remove checking svctcp_socket and svcudp_socket.
+	* configure: Regenerated.
+
+	* support/include/config.h.in (HAVE_SVCTCP_SOCKET): Removed.
+	(HAVE_SVCUDP_SOCKET): Removed.
+
+	* support/include/nfslib.h: Undo the last change.
+
+2002-09-12  H.J. Lu <hjl@lucon.org>
+
+	* support/include/nfslib.h (svctcp_socket): Protect it with
+	HAVE_SVCTCP_SOCKET.
+	(svcudp_socket): Protect it with HAVE_SVCUDP_SOCKET.
+
+2002-09-12  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "1.0.2".
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+2002-09-12  H.J. Lu <hjl@lucon.org>
+
+	* configure.in: Check svctcp_socket and svcudp_socket.
+	* configure: Regenerated.
+
+	* support/include/config.h.in (HAVE_SVCTCP_SOCKET): New.
+	(HAVE_SVCUDP_SOCKET): New.
+
+	* support/include/nfslib.h (svctcp_socket): New.
+	(svcudp_socket): New.
+
+	* support/nfs/Makefile (OBJS): Add svc_socket.o.
+
+	* support/nfs/svc_socket.c: New.
+
+	* support/nfs/rpcmisc.c (rpc_init): Call svctcp_socket and
+	svcudp_socket if port is unspecified.
+
+	* utils/nfsd/nfsd.c (main): Call getservbyname for port.
+
+	* utils/rquotad/rquota_svc.c: Include <nfslib.h>.
+	(killer): New. Signal handler to unregister.
+	(main): Use killer. Call svcudp_socket to get the default
+	socket.
+
+2002-09-02 Juan Gomez <juang@us.ibm.com>
+	NeilBrown <neilb@cse.unsw.edu.au>
+
+	Add -N option to statd to run in notify-only mode.
+
+	* utils/statd/statd.h: uncomment MODE_NOTIFY_ONLY
+	* utils/statd/statd.man: document -N
+	* utils/statd/statd.c: enabled -N, largely exists but needed to be
+	uncommented and completed
+	
+2002-09-02 Juan Gomez <juang@us.ibm.com>
+	NeilBrown <neilb@cse.unsw.edu.au>
+
+	statd to have " -P directory" arg to use that directory instead
+	of /var/lib/nfs.  This is useful for fail-over clusters.
+	
+	* utils/statd/statd.h: define SM_DIR etc as var, not const.
+	* utils/statd/statd.c: define "-P" option to set SM_*
+	appropriately.
+	* utils/statd/monitor.c: sprintf to cope with SM_DIR not being
+	a constant any more.
+	* utils/statd/notify.c: ditto.
+	* utils/statd/statd.man: document -P option.
+	
+2002-08-26  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/nfsd/nfsd.man: Fix typo.
+	* debian/changelog: Version 1.0.1-1.
+
 2002-05-29 NeilBrown <neilb@cse.unsw.edu.au>
 
 	* let parseopts know if /etc/exports was being read or not, 

@@ -24,6 +24,17 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+/* Added to enable specification of state directory path at run-time
+ * j_carlos_gomez@yahoo.com
+ */
+
+char * DIR_BASE = DEFAULT_DIR_BASE;
+
+char *  SM_DIR = DEFAULT_SM_DIR;
+char *  SM_BAK_DIR =  DEFAULT_SM_BAK_DIR;
+char *  SM_STAT_PATH = DEFAULT_SM_STAT_PATH;
+
+/* ----- end of state directory path stuff ------- */
 
 short int restart = 0;
 int	run_mode = 0;		/* foreground logging mode */
@@ -43,6 +54,8 @@ static struct option longopts[] =
 	{ "outgoing-port", 1, 0, 'o' },
 	{ "port", 1, 0, 'p' },
 	{ "name", 1, 0, 'n' },
+	{ "state-directory-path", 1, 0, 'P' },
+	{ "notify-mode", 0, 0, 'N' },
 	{ NULL, 0, 0, 0 }
 };
 
@@ -80,7 +93,9 @@ static void
 killer (int sig)
 {
 	log (L_FATAL, "Caught signal %d, un-registering and exiting.", sig);
-	pmap_unset (SM_PROG, SM_VERS);
+	if (!(run_mode & MODE_NOTIFY_ONLY))
+		pmap_unset (SM_PROG, SM_VERS);
+
 	exit (0);
 }
 
@@ -100,11 +115,11 @@ static void log_modes(void)
 		strcat(buf,"No-Daemon ");
 	if (run_mode & MODE_LOG_STDERR)
 		strcat(buf,"Log-STDERR ");
-	/* future: IP aliasing
+
 	if (run_mode & MODE_NOTIFY_ONLY)
 	{
 		strcat(buf,"Notify-Only ");
-	} */
+	}
 	log(L_WARNING,buf);
 	/* future: IP aliasing
 	if (run_mode & MODE_NOTIFY_ONLY)
@@ -128,6 +143,8 @@ usage()
 	fprintf(stderr,"      -o, --outgoing-port  Port for outgoing connections\n");
 	fprintf(stderr,"      -V, -v, --version    Display version information and exit.\n");
 	fprintf(stderr,"      -n, --name           Specify a local hostname.\n");
+	fprintf(stderr,"      -P                   State directory path.\n");
+	fprintf(stderr,"      -N                   Run in notify only mode.\n");
 }
 
 /* 
@@ -161,7 +178,7 @@ int main (int argc, char **argv)
 	MY_NAME = NULL;
 
 	/* Process command line switches */
-	while ((arg = getopt_long(argc, argv, "h?vVFdn:p:o:", longopts, NULL)) != EOF) {
+	while ((arg = getopt_long(argc, argv, "h?vVFNdn:p:o:P:", longopts, NULL)) != EOF) {
 		switch (arg) {
 		case 'V':	/* Version */
 		case 'v':
@@ -169,6 +186,9 @@ int main (int argc, char **argv)
 			exit(0);
 		case 'F':	/* Foreground/nodaemon mode */
 			run_mode |= MODE_NODAEMON;
+			break;
+		case 'N':
+			run_mode |= MODE_NOTIFY_ONLY;
 			break;
 		case 'd':	/* No daemon only - log to stderr */
 			run_mode |= MODE_LOG_STDERR;
@@ -193,6 +213,36 @@ int main (int argc, char **argv)
 			break;
 		case 'n':	/* Specify local hostname */
 			MY_NAME = xstrdup(optarg);
+			break;
+		case 'P':
+
+			if ((DIR_BASE = xstrdup(optarg)) == NULL) {
+				fprintf(stderr, "%s: xstrdup(%s) failed!\n",
+					argv[0], optarg);
+				exit(1);
+			}
+
+			SM_DIR = xmalloc(strlen(DIR_BASE) + 1 + sizeof("sm"));
+			SM_BAK_DIR = xmalloc(strlen(DIR_BASE) + 1 + sizeof("sm.bak"));
+			SM_STAT_PATH = xmalloc(strlen(DIR_BASE) + 1 + sizeof("state"));
+
+			if ((SM_DIR == NULL) 
+			    || (SM_BAK_DIR == NULL) 
+			    || (SM_STAT_PATH == NULL)) {
+
+				fprintf(stderr, "%s: xmalloc() failed!\n",
+					argv[0]);
+				exit(1);
+			}
+			if (DIR_BASE[strlen(DIR_BASE)-1] == '/') {
+				sprintf(SM_DIR, "%ssm", DIR_BASE );
+				sprintf(SM_BAK_DIR, "%ssm.bak", DIR_BASE );
+				sprintf(SM_STAT_PATH, "%sstate", DIR_BASE );
+			} else {
+				sprintf(SM_DIR, "%s/sm", DIR_BASE );
+				sprintf(SM_BAK_DIR, "%s/sm.bak", DIR_BASE );
+				sprintf(SM_STAT_PATH, "%s/state", DIR_BASE );
+			}
 			break;
 		case '?':	/* heeeeeelllllllpppp? heh */
 		case 'h':
@@ -259,24 +309,32 @@ int main (int argc, char **argv)
 	statd_get_socket(out_port);
 
 	for (;;) {
-		pmap_unset (SM_PROG, SM_VERS);
+		if (!(run_mode & MODE_NOTIFY_ONLY)) {
+			/* Do not do pmap_unset() when running in notify mode.
+			 * We may clear the portmapper record for a statd not
+			 * running in notify mode disabling it.
+			 * Juan C. Gomez j_carlos_gomez@yahoo.com
+			 */
+			pmap_unset (SM_PROG, SM_VERS);
+		}
 		change_state ();
 		shuffle_dirs ();	/* Move directory names around */
 		notify_hosts ();	/* Send out notify requests */
 		++restart;
 
-		/* future: IP aliasing 
+		/* this registers both UDP and TCP services */
 		if (!(run_mode & MODE_NOTIFY_ONLY)) {
 			rpc_init("statd", SM_PROG, SM_VERS, sm_prog_1, port);
-		} */
-		/* this registers both UDP and TCP services */
-		rpc_init("statd", SM_PROG, SM_VERS, sm_prog_1, port);
+		} 
 
 		/*
 		 * Handle incoming requests:  SM_NOTIFY socket requests, as
 		 * well as callbacks from lockd.
 		 */
 		my_svc_run();	/* I rolled my own, Olaf made it better... */
+
+		if ((run_mode & MODE_NOTIFY_ONLY))
+			break;			
 	}
 	return 0;
 }

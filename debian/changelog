@@ -1,3 +1,57 @@
+nfs-utils (1:1.0.3-1) unstable; urgency=low
+
+  * New upstream version:
+    > Support reading and writing export cache in /proc/rpc/*/channel,
+      as current syscall interface may not survive into 2.6 on all archs.
+
+ -- Chip Salzenberg <chip@debian.org>  Wed, 26 Mar 2003 11:38:52 -0500
+
+nfs-utils (1:1.0.2-2) unstable; urgency=medium
+
+  * Upstream CVS sync:
+    > Fix one-byte buffer overflow with no apparent security implications.
+      (It's a readlink on a path that should be writable only to root.)
+  * Make nfs-{common,kernel-server} depend on sysvinit 2.80-1 for invoke-rc.d.
+  * Make nfs-common depend on debconf (long overdue).
+  * Fix package description to name nfs-user-server as an alternative, rather
+    than "nfs-server" (which no longer exists).
+
+ -- Chip Salzenberg <chip@debian.org>  Wed, 12 Feb 2003 21:27:24 -0500
+
+nfs-utils (1:1.0.2-1) unstable; urgency=high
+
+  * New upstream version:
+    > Allow program stdin to be a non-INET socket.  (closes: #142557)
+  * Start nfs-common after nfs-kernel-server so that the server is running
+    when statd restarts; without this change, a rebooting server may make
+    clients lose mounts.  (This postinst removes bad rc.d links from old
+    packages.)  From Philippe Troin <phil@fifi.org>.  (closes: #160800)
+  * Make init scripts exit with non-zero status when daemons don't start.
+  * Add titles to templates where I forgot them.  (closes: #158489)
+  * Add /etc/default/{nfs-common,nfs-kernel-server} so setting random
+    parameters doesn't require editing init scripts.  (closes: #131539)
+  * Split templates into separate files, and add French templates.
+    (closes: #134630)
+  * Use invoke-rc.d to avoid premature daemon starts.  (closes: 158574)
+  * Change priority of nfs-kernel-server to 'optional'.
+
+ -- Chip Salzenberg <chip@debian.org>  Sun, 15 Sep 2002 22:00:27 -0400
+
+nfs-utils (1:1.0.1-1) unstable; urgency=low
+
+  * New upstream version:
+    > BIG CHANGE: Exports default to "sync", that is, synchronous writes.
+      This is safer but MUCH SLOWER than the old default of "async".
+      All exports should be marked as either "sync" or "async" to avoid a
+      warning from exportfs.
+  * Patches from CVS through 2002-08-26.
+  * Let init script start statd on a specific port.  (closes: #144344)
+  * Fix typo in debconf message about tcpwrappers.  (closes: #128709)
+  * Fix typo in rpc.nfsd(8).  (closes: #152556)
+  * Add Russian templates.  (closes: #136599, #136932)
+
+ -- Chip Salzenberg <chip@debian.org>  Mon, 26 Aug 2002 12:17:57 -0400
+
 nfs-utils (1:1.0-2) unstable; urgency=low
 
   * Fail an export if its mapping option is unsupported.  (closes: #85678)
