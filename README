@@ -1,7 +1,7 @@
-This is the Linux NFS utility package version 0.1.2. It is based on
+This is the Linux NFS utility package version 0.1.3. It is based on
 knfsd 1.4.7.
 
-WARNING: The NFS servers in Linux 2.2 to 2.2.12 are not compatible with
+WARNING: The NFS servers in Linux 2.2 to 2.2.13 are not compatible with
 other NFS client implemenations. If you plan to use Linux 2.2.x as an
 NFS server for non-Linux NFS clients, you should get the Linux NFS
 kernel from the Linux NFS CVS server:
@@ -37,14 +37,13 @@ If there is no NFS patch for the kernel you are interested in, you have
 to make a patch closest to your kernel version and apply it by hand.
 
 There is a Linux NFS kernel source tree for Linux 2.3, linux-2.3, on
-the Linux NFS CVS server. However, it is not maintained. We will need
-all the help we can get. To contribute to the Linux NFS project, please
-go to
+the Linux NFS CVS server. We will need all the help we can get. To
+contribute to the Linux NFS project, please go to
 
 http://www.linuxnfs.sourceforge.org
 
-and login as "beta" with password "beta4u". You register yourself.
-please send an email to nfs-admin@linuxnfs.sourceforge.org with
+You register yourself. Please send an email to
+nfs-admin@linuxnfs.sourceforge.org with
 
 1. Your user id on www.linuxnfs.sourceforge.org.
 2. The area in NFS you'd like to work on.
@@ -58,7 +57,7 @@ http://lists.varesearch.com/lists/listinfo/nfs/
 You can subscribe it and search the mailing list archive via a web
 browser.
 
-The nfs-utils package is avaible from the CVS server:
+The nfs-utils package is available from the CVS server:
 
 # cvs -z 3 -d:pserver:anonymous@cvs.linuxnfs.sourceforge.org:/cvsroot/nfs co nfs-utils
 
@@ -66,8 +65,8 @@ will get the latest version.
 
 The files are
 
-ftp://ftp.valinux.com/pub/support/hjl/nfs/nfs-utils-0.1.2.tar.gz
-ftp://ftp.valinux.com/pub/support/hjl/nfs/nfs-utils-0.1.1-0.1.2.diff.gz
+ftp://ftp.linuxnfs.sourceforge.org/pub/nfs/nfs-utils-0.1.3.tar.gz
+ftp://ftp.linuxnfs.sourceforge.org/pub/nfs/nfs-utils-0.1.2-0.1.3.diff.gz
 
 To compile, just do
 
@@ -82,18 +81,18 @@ They are tested on RedHat 6.1.
 
 On RedHat 6.1, you can use
 
-# rpm -ta nfs-utils-0.1.2.tar.gz
+# rpm -ta nfs-utils-0.1.3.tar.gz
 
 to build the source and binary RPMs.
 
 If your mount from util-linux is too old, you will need 2 patches:
 
-ftp://ftp.valinux.com/pub/support/hjl/nfs/util-linux-2.9o-mount-nfsv3.patch
-ftp://ftp.valinux.com/pub/support/hjl/nfs/util-linux-2.9w-mount-nfsv3try.patch
+ftp://ftp.linuxnfs.sourceforge.org/pub/nfs/util-linux-2.9o-mount-nfsv3.patch
+ftp://ftp.linuxnfs.sourceforge.org/pub/nfs/util-linux-2.9w-mount-nfsv3try.patch
 
 Thanks.
 
 
 H.J.
 hjl@lucon.org
-10/25/99
+11/29/99

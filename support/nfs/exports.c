@@ -141,12 +141,16 @@ putexportent(struct exportent *ep)
 	fprintf(fp, "%ssync,", (ep->e_flags & NFSEXP_ASYNC)? "a" : "");
 	fprintf(fp, "%swdelay,", (ep->e_flags & NFSEXP_GATHERED_WRITES)?
 				"" : "no_");
+	fprintf(fp, "%shide,", (ep->e_flags & NFSEXP_CROSSMNT)?
+				"no" : "");
 	fprintf(fp, "%ssecure,", (ep->e_flags & NFSEXP_INSECURE_PORT)?
 				"in" : "");
 	fprintf(fp, "%sroot_squash,", (ep->e_flags & NFSEXP_ROOTSQUASH)?
 				"" : "no_");
 	fprintf(fp, "%sall_squash,", (ep->e_flags & NFSEXP_ALLSQUASH)?
 				"" : "no_");
+	fprintf(fp, "%ssubtree_check,", (ep->e_flags & NFSEXP_NOSUBTREECHECK)?
+		"no_" : "");
 
 	fprintf(fp, "mapping=");
 	switch (ep->e_maptype) {
@@ -249,12 +253,11 @@ updateexportent(struct exportent *eep, char *options)
 }
 
 /*
- * Parse option string pointed to by s and set mount options accordingly.
+ * Parse option string pointed to by cp and set mount options accordingly.
  */
 static int
 parseopts(char *cp, struct exportent *ep)
 {
-	char 	*opt;
 
 	squids = ep->e_squids; nsquids = ep->e_nsquids;
 	sqgids = ep->e_sqgids; nsqgids = ep->e_nsqgids;
@@ -262,11 +265,14 @@ parseopts(char *cp, struct exportent *ep)
 	while (isblank(*cp))
 		cp++;
 	while (*cp) {
-		opt = cp;
+		char *opt = strdup(cp);
+		char *optstart = cp;
 		while (*cp && *cp != ',')
 			cp++;
-		if (*cp)
-			*cp++ = '\0';
+		if (*cp) {
+			opt[cp-optstart] = '\0';
+			cp++;
+		}
 
 		/* process keyword */
 		if (strcmp(opt, "ro") == 0)
@@ -281,6 +287,10 @@ parseopts(char *cp, struct exportent *ep)
 			ep->e_flags &= ~NFSEXP_ASYNC;
 		else if (!strcmp(opt, "async"))
 			ep->e_flags |= NFSEXP_ASYNC;
+		else if (!strcmp(opt, "nohide"))
+			ep->e_flags |= NFSEXP_CROSSMNT;
+		else if (!strcmp(opt, "hide"))
+			ep->e_flags &= ~NFSEXP_CROSSMNT;
 		else if (!strcmp(opt, "wdelay"))
 			ep->e_flags |= NFSEXP_GATHERED_WRITES;
 		else if (!strcmp(opt, "no_wdelay"))
@@ -293,6 +303,10 @@ parseopts(char *cp, struct exportent *ep)
 			ep->e_flags |= NFSEXP_ALLSQUASH;
 		else if (strcmp(opt, "no_all_squash") == 0)
 			ep->e_flags &= ~NFSEXP_ALLSQUASH;
+		else if (strcmp(opt, "subtree_check") == 0)
+			ep->e_flags &= ~NFSEXP_NOSUBTREECHECK;
+		else if (strcmp(opt, "no_subtree_check") == 0)
+			ep->e_flags |= NFSEXP_NOSUBTREECHECK;
 		else if (strncmp(opt, "mapping=", 8) == 0)
 			ep->e_maptype = parsemaptype(opt+8);
 		else if (strcmp(opt, "map_identity") == 0)	/* old style */
@@ -304,18 +318,24 @@ parseopts(char *cp, struct exportent *ep)
 		else if (strncmp(opt, "anongid=", 8) == 0)
 			ep->e_anongid = atoi(opt+8);
 		else if (strncmp(opt, "squash_uids=", 12) == 0) {
-			if (parsesquash(opt+12, &squids, &nsquids, &cp) < 0)
+			if (parsesquash(opt+12, &squids, &nsquids, &cp) < 0) {
+				free(opt);
 				return -1;
+			}
 		} else if (strncmp(opt, "squash_gids=", 12) == 0) {
-			if (parsesquash(opt+12, &sqgids, &nsqgids, &cp) < 0)
+			if (parsesquash(opt+12, &sqgids, &nsqgids, &cp) < 0) {
+				free(opt);
 				return -1;
+			}
 		} else {
 			xlog(L_ERROR,
 				"Unknown keyword \"%s\" in export file\n",
 				opt);
 			ep->e_flags |= NFSEXP_ALLSQUASH | NFSEXP_READONLY;
+			free(opt);
 			return -1;
 		}
+		free(opt);
 		while (isblank(*cp))
 			cp++;
 	}
