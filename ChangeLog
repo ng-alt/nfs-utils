@@ -1,3 +1,32 @@
+Mon Dec  6 09:42:45 1999  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.4".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+Mon Dec  6 09:28:07 1999  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec.in: New file.
+
+	* config.mk.in (VERSION): Changed to "nfs-utils @VERSION@".
+
+	* configure.in (nfs-utils.spec): Added to AC_OUTPUT.
+
+1999-12-04  Chip Salzenberg  <chip@valinux.com>
+
+	* config.mk.in: Use $(CC) as set by configure.
+
+1999-12-04  Chip Salzenberg  <chip@valinux.com>
+
+	* rules.mk: Call $(MAKE) with $(MFLAGS).
+
+Mon Nov 29 11:17:35 1999  H.J. Lu <hjl@lucon.org>
+
+	* tools/rpcgen/rpc_main.c (h_output): Generate IXDR_GET_INT32,
+	IXDR_PUT_INT32, IXDR_GET_U_INT32 and IXDR_PUT_U_INT32.
+
 Mon Nov 29 11:17:35 1999  H.J. Lu <hjl@lucon.org>
 
 	* nfs-utils.spec (Version): Set to 0.1.3.
