@@ -2,10 +2,16 @@
 
 #DEBHELPER#
 
+. /usr/share/debconf/confmodule
+
 case "$1" in
     configure)
-	mkdir -p /var/lib/nfs
-	touch /var/lib/nfs/xtab /var/lib/nfs/etab /var/lib/nfs/rmtab
+	db_get nfs-kernel-server/tcpwrappers-mountd || true
+
+	touch /var/lib/nfs/etab  \
+              /var/lib/nfs/rmtab \
+              /var/lib/nfs/xtab
+
 	if test -s /etc/exports
 	then
 	    : do nothing
@@ -16,12 +22,16 @@ case "$1" in
 EOF
 	fi
 
-	update-rc.d nfs-kernel-server defaults 20 80 >/dev/null 2>&1
+	# The old nfs-server's init script can't tell that it's been
+	# removed, so we have to kill the symlinks to it.
+	update-rc.d -f nfs-server remove >/dev/null
 
-	/etc/init.d/nfs-kernel-server start
-	;;
-
-    *)
-	/etc/init.d/nfs-kernel-server start
+	update-rc.d nfs-kernel-server defaults 20 80 >/dev/null
 	;;
 esac
+
+db_stop
+
+act="restart"
+[ "$1:$2" = "configure:" ] && act="start"
+/etc/init.d/nfs-kernel-server $act

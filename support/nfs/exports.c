@@ -29,8 +29,9 @@
 #include "xio.h"
 
 #define EXPORT_DEFAULT_FLAGS	\
-  (NFSEXP_ASYNC|NFSEXP_READONLY|NFSEXP_ROOTSQUASH|NFSEXP_GATHERED_WRITES)
+  (NFSEXP_READONLY|NFSEXP_ROOTSQUASH|NFSEXP_GATHERED_WRITES)
 
+static char	*efname = NULL;
 static XFILE	*efp = NULL;
 static int	first;
 static int	*squids = NULL, nsquids = 0,
@@ -38,7 +39,7 @@ static int	*squids = NULL, nsquids = 0,
 
 static int	getexport(char *exp, int len);
 static int	getpath(char *path, int len);
-static int	parseopts(char *cp, struct exportent *ep);
+static int	parseopts(char *cp, struct exportent *ep, int warn);
 static int	parsesquash(char *list, int **idp, int *lenp, char **ep);
 static int	parsenum(char **cpp);
 static int	parsemaptype(char *type);
@@ -55,11 +56,12 @@ setexportent(char *fname, char *type)
 	if (!(efp = xfopen(fname, type)))
 		xlog(L_ERROR, "can't open %s for %sing",
 				fname, strcmp(type, "r")? "writ" : "read");
+	efname = strdup(fname);
 	first = 1;
 }
 
 struct exportent *
-getexportent(void)
+getexportent(int fromkernel, int fromexports)
 {
 	static struct exportent	ee;
 	char		exp[512];
@@ -72,6 +74,15 @@ getexportent(void)
 
 	freesquash();
 	ee.e_flags = EXPORT_DEFAULT_FLAGS;
+	/* some kernels assume the default is sync rather than
+	 * async.  More recent kernels always report one or other,
+	 * but this test makes sure we assume same as kernel
+	 * Ditto for wgather
+	 */
+	if (fromkernel) {
+		ee.e_flags &= ~NFSEXP_ASYNC;
+		ee.e_flags &= ~NFSEXP_GATHERED_WRITES;
+	}
 	ee.e_maptype = CLE_MAP_IDENT;
 	ee.e_anonuid = -2;
 	ee.e_anongid = -2;
@@ -106,10 +117,8 @@ getexportent(void)
 			return NULL;
 		}
 		*sp = '\0';
-		if (parseopts(opt, &ee) < 0)
-			return NULL;
 	} else {
-	    xlog(L_WARNING, "No options for %s %s: suggest %s() to avoid warning", ee.e_path, exp, exp);
+	    xlog(L_WARNING, "No options for %s %s: suggest %s(sync) to avoid warning", ee.e_path, exp, exp);
 	}
 	if (strlen(exp) >= sizeof(ee.e_hostname)) {
 		syntaxerr("client name too long");
@@ -117,6 +126,9 @@ getexportent(void)
 	}
 	strncpy(ee.e_hostname, exp, sizeof (ee.e_hostname) - 1);
 	ee.e_hostname[sizeof (ee.e_hostname) - 1] = '\0';
+
+	if (parseopts(opt, &ee, fromexports) < 0)
+		return NULL;
 
 	/* resolve symlinks */
 	if (realpath(ee.e_path, rpath) != NULL) {
@@ -164,7 +176,9 @@ putexportent(struct exportent *ep)
 		"no_" : "");
 	fprintf(fp, "%ssecure_locks,", (ep->e_flags & NFSEXP_NOAUTHNLM)?
 		"in" : "");
-
+	if (ep->e_flags & NFSEXP_FSID) {
+		fprintf(fp, "fsid=%d,", ep->e_fsid);
+	}
 	fprintf(fp, "mapping=");
 	switch (ep->e_maptype) {
 	case CLE_MAP_IDENT:
@@ -205,6 +219,9 @@ endexportent(void)
 	if (efp)
 		xfclose(efp);
 	efp = NULL;
+	if (efname)
+		free(efname);
+	efname = NULL;
 	freesquash();
 }
 
@@ -252,7 +269,7 @@ mkexportent(char *hname, char *path, char *options)
 	ee.e_path[sizeof (ee.e_path) - 1] = '\0';
 	strncpy (ee.m_path, ee.e_path, sizeof (ee.m_path) - 1);
 	ee.m_path [sizeof (ee.m_path) - 1] = '\0';
-	if (options && parseopts(options, &ee) < 0)
+	if (parseopts(options, &ee, 0) < 0)
 		return NULL;
 	return &ee;
 }
@@ -260,7 +277,7 @@ mkexportent(char *hname, char *path, char *options)
 int
 updateexportent(struct exportent *eep, char *options)
 {
-	if (options && parseopts(options, eep) < 0)
+	if (parseopts(options, eep, 0) < 0)
 		return 0;
 	return 1;
 }
@@ -269,14 +286,21 @@ updateexportent(struct exportent *eep, char *options)
  * Parse option string pointed to by cp and set mount options accordingly.
  */
 static int
-parseopts(char *cp, struct exportent *ep)
+parseopts(char *cp, struct exportent *ep, int warn)
 {
+	int	had_sync_opt = 0;
+	char 	*flname = efname?efname:"command line";
+	int	flline = efp?efp->x_line:0;
 
 	squids = ep->e_squids; nsquids = ep->e_nsquids;
 	sqgids = ep->e_sqgids; nsqgids = ep->e_nsqgids;
 
+	if (!cp)
+		goto out;
+
 	while (isblank(*cp))
 		cp++;
+
 	while (*cp) {
 		char *opt = strdup(cp);
 		char *optstart = cp;
@@ -296,13 +320,19 @@ parseopts(char *cp, struct exportent *ep)
 			ep->e_flags &= ~NFSEXP_INSECURE_PORT;
 		else if (!strcmp(opt, "insecure"))
 			ep->e_flags |= NFSEXP_INSECURE_PORT;
-		else if (!strcmp(opt, "sync"))
+		else if (!strcmp(opt, "sync")) {
+			had_sync_opt = 1;
 			ep->e_flags &= ~NFSEXP_ASYNC;
-		else if (!strcmp(opt, "async"))
+		} else if (!strcmp(opt, "async")) {
+			had_sync_opt = 1;
 			ep->e_flags |= NFSEXP_ASYNC;
-		else if (!strcmp(opt, "nohide"))
+		} else if (!strcmp(opt, "nohide"))
 			ep->e_flags |= NFSEXP_CROSSMNT;
 		else if (!strcmp(opt, "hide"))
+			ep->e_flags &= ~NFSEXP_CROSSMNT;
+		else if (!strcmp(opt, "crossmnt"))		/* old style */
+			ep->e_flags |= NFSEXP_CROSSMNT;
+		else if (!strcmp(opt, "nocrossmnt"))		/* old style */
 			ep->e_flags &= ~NFSEXP_CROSSMNT;
 		else if (!strcmp(opt, "wdelay"))
 			ep->e_flags |= NFSEXP_GATHERED_WRITES;
@@ -334,11 +364,25 @@ parseopts(char *cp, struct exportent *ep)
 			ep->e_maptype = CLE_MAP_IDENT;
 		else if (strcmp(opt, "map_daemon") == 0)	/* old style */
 			ep->e_maptype = CLE_MAP_UGIDD;
-		else if (strncmp(opt, "anonuid=", 8) == 0)
-			ep->e_anonuid = atoi(opt+8);
-		else if (strncmp(opt, "anongid=", 8) == 0)
-			ep->e_anongid = atoi(opt+8);
-		else if (strncmp(opt, "squash_uids=", 12) == 0) {
+		else if (strncmp(opt, "anonuid=", 8) == 0) {
+			char *oe;
+			ep->e_anonuid = strtol(opt+8, &oe, 10);
+			if (opt[8]=='\0' || *oe != '\0') {
+				xlog(L_ERROR, "%s: %d: bad anonuid \"%s\"\n",
+				     flname, flline, opt);	
+				free(opt);
+				return -1;
+			}
+		} else if (strncmp(opt, "anongid=", 8) == 0) {
+			char *oe;
+			ep->e_anongid = strtol(opt+8, &oe, 10);
+			if (opt[8]=='\0' || *oe != '\0') {
+				xlog(L_ERROR, "%s: %d: bad anongid \"%s\"\n",
+				     flname, flline, opt);	
+				free(opt);
+				return -1;
+			}
+		} else if (strncmp(opt, "squash_uids=", 12) == 0) {
 			if (parsesquash(opt+12, &squids, &nsquids, &cp) < 0) {
 				free(opt);
 				return -1;
@@ -348,10 +392,19 @@ parseopts(char *cp, struct exportent *ep)
 				free(opt);
 				return -1;
 			}
+		} else if (strncmp(opt, "fsid=", 5) == 0) {
+			char *oe;
+			ep->e_fsid = strtoul(opt+5, &oe, 0);
+			if (opt[5]=='\0' || *oe != '\0') {
+				xlog(L_ERROR, "%s: %d: bad fsid \"%s\"\n",
+				     flname, flline, opt);	
+				free(opt);
+				return -1;
+			}
+			ep->e_flags |= NFSEXP_FSID;
 		} else {
-			xlog(L_ERROR,
-				"Unknown keyword \"%s\" in export file\n",
-				opt);
+			xlog(L_ERROR, "%s:%d: unknown keyword \"%s\"\n",
+					flname, flline, opt);
 			ep->e_flags |= NFSEXP_ALLSQUASH | NFSEXP_READONLY;
 			free(opt);
 			return -1;
@@ -365,6 +418,13 @@ parseopts(char *cp, struct exportent *ep)
 	ep->e_sqgids = sqgids;
 	ep->e_nsquids = nsquids;
 	ep->e_nsqgids = nsqgids;
+
+out:
+	if (warn && !had_sync_opt)
+		xlog(L_WARNING, "No 'sync' or 'async' option specified for export \"%s:%s\".\n"
+				"  Assuming default behaviour ('sync').\n"
+		     		"  NOTE: this default has changed from previous versions\n",
+				ep->e_hostname, ep->e_path);
 
 	return 1;
 }
@@ -468,14 +528,15 @@ getexport(char *exp, int len)
 
 	xskip(efp, " \t");
 	if ((ok = xgettok(efp, 0, exp, len)) < 0)
-		xlog(L_ERROR, "error parsing export entry");
+		xlog(L_ERROR, "%s:%d: syntax error",
+			efname?"command line":efname, efp->x_line);
 	return ok;
 }
 
 static void
 syntaxerr(char *msg)
 {
-	xlog(L_ERROR, "syntax error in exports file (line %d): %s",
-				efp->x_line, msg);
+	xlog(L_ERROR, "%s:%d: syntax error: %s",
+			efname, efp?efp->x_line:0, msg);
 }
 

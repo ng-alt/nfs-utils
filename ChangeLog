@@ -1,3 +1,169 @@
+2002-05-29 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* let parseopts know if /etc/exports was being read or not, 
+	and have it only print "no sync or async" warning in that case.
+	
+2002-05-06 Tom McNeal <trmcneal@attbi.com>
+	NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/nfsstat/nfsstat.c: Handle differing format for
+	   /proc/net/rpc/nfsd between pre and post 2.4.0
+	
+2002-04-09  NeilBrown <neilb@cse.unsw.edu.au>
+	James Pearson <james-p@moving-picture.com>
+
+	* support/nfs/rmtab.c(fendrmtabent): sync changes to 
+	storage before returning, as this is critical state
+
+2002-04-08  Sean O'Connell <sean@ee.duke.edu>
+	    H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs: New.
+
+2002-04-08  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Updated.
+
+	* nfs-utils.spec.in: Updated.
+	* nfs-utils.spec: Regenerated.
+
+	* utils/mountd/mountd.c (longopts): Fix a typo.
+
+	* utils/mountd/mountd.man: Updated.
+
+2002-04-07  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfslock.init (restart): Just do stop and start.
+
+	* etc/redhat/nfs.init: Fix a typo.
+
+2002-04-07  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "1.0.1".
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+	* README: Updated for 1.0.1.
+
+2002-04-07  Sean O'Connell <sean@ee.duke.edu>
+	    H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Read /etc/sysconfig/nfsd for NFS tuning.
+
+2002-02-28   Steven Whitehouse <steve@gw.chygwyn.com>
+	      NeilBrown <neilb@cse.unsw.edu.au>
+
+	Add support for fsid=nn export option so that device
+	numbers don't go in filehandles.
+	* support/export/nfsctl.c(expsetup): if exporting and NFSEXP_FSID
+	is set, pass the fsid in-place of the device number
+	* support/nfs/exports.c: parse and print fsid= option.
+	Also check if efname has been set, and use "command line"
+	instead in error messages.
+	Also, use strtol instead of atoi for anon[ug]id= so that
+	bad numbers cause errors.
+	
+2002-01-17   Adrian Drzewiecki <drze@MissionCriticalLinux.com>
+	     NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/nfs/exports.c: remove NFSEXP_ASYNC as a default
+	flag so that "sync" becomes the default.
+	Check that either "sync" or "async" is given as an option
+	and warn if neither are present
+	* utils/exportfs/exports.man: change documentation for "sync"
+	to be documentation for "async".
+	* utils/exportfs/exportfs.man: note that "sync" is the default
+	rather than "async"
+	
+	
+2002-01-02  Chip Salzenberg  <chip@pobox.com>
+
+	* support/export/nfsctl.c (expsetup): Don't export entries that
+	specify id mappings not supported by the kernel.  No extant kernel
+	supports any significant mapping, only 'identity' (i.e. none).
+	When other mappings are supported, this code will need changing.
+	* debian/changelog: Version 1.0-2.
+
+2001-12-26  Chip Salzenberg  <chip@pobox.com>
+
+	* nfs-utils.spec (Version): Set to "1.0".
+	* configure.in (VERSION): Likewise.
+	* configure: Regenerated.
+	* README: Rewritten.
+	* debian/changelog: Version 1.0-1.
+
+	* utils/exportfs/exports.man: Emphasize the need for options to
+	immediately follow client names.  Explain that wildcards don't
+	usually work on addresses, but may work when reverse DNS fails.
+	Comment out a leftover TP that was TPing our indentation.
+	* utils/mountd/mountd.man, utils/rquotad/rquotad.man,
+	utils/statd/statd.man: Remove refs to non-existent "hosts_allow(5)".
+	* debian/changelog: Version 0.3.3-6.
+
+2001-12-20  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/export/client.c(client_lookup): If a host has multiple
+	IP addresses, then we must always use the result of a
+	gethostbyname, not that of gethostbyaddr for exporting
+	
+2001-12-20  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/export/client.c (client_lookup): use strcasecmp when
+	comparing host names
+	* support/nfs/export.c (getexportent): add fromkernel arg and use
+	different defaults as kernels prior to 2.4.11 assume different
+	defaults in /proc/fs/nfs/exports
+	* support/include/nfslib.h, support/export/export.c,
+	support/export/xtab.c:  support extra "fromkernel" arg for
+	getexportent. 
+	
+2001-12-13  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 0.3.3-5.
+
+2001-11-26  TAKAI Kousuke <takai@vlsi.kuee.kyoto-u.ac.jp>
+
+	* support/nfs/xio.c (xskip): Call `xungetc' instead of
+        `ungetc' to keep x_line more properly.
+
+2001-11-26  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/showmount/showmount.c (main): Don't assume that strings
+	starting with digits are IP addresses.
+	* utils/nfsd/nfsd.c (main): Close all fds and reopen 0,1,2 on
+	/dev/null before nfssvc().  Use syslog to report nfssvc errors.
+	* support/misc/tcpwrapper.c, utils/mountd/mountd.man,
+	utils/rquotad/rquotad.man, utils/statd/statd.man: Fix comments and
+	man pages: We check host names *and* addresses with tcpwrappers.
+	* debian/changelog: Version 0.3.3-4.
+
+2001-11-21  Chip Salzenberg  <chip@pobox.com>
+
+	* support/nfs/clients.c (cfname): Added: current clients file name.
+	(setnfsclntent): Set it.
+	({get,end}nfsclntent, syntaxerr): Use it.
+	* support/nfs/exports.c (efname): Added: current exports file name.
+	(setnfsexportent): Set it.
+	(endnfsexportent, parseopts, getexport, syntaxerr): Use it.
+	(parseopts): Accept old-style "crossmnt" option, for old xtabs.
+	* debian/changelog: Version 0.3.3-3.
+
+2001-10-11  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/mountd/mountd.c (main): Close fds > 2 _before_ RPC init.
+	* debian/changelog: Version 0.3.3-2.
+
+2001-10-08  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/mountd/mountd.c (main): When daemonizing, close all fds > 2.
+	* utils/Makefile.in: Remove old Makefile in target 'distclean'.
+	* utils/mountd/mountd.man: Update paths to /var/lib.
+	* debian/*: Version 0.3.3-1, with Debian-specific fixes.
+
+2001-10-06  Preston Brown <pbrown@redhat.com>
+
+	* utils/nfsstat/nfsstat.man: Updated.
+
 2001-09-24  H.J. Lu <hjl@lucon.org>
 
 	* configure.in (VERSION): Set to "0.3.3".

@@ -31,7 +31,7 @@ static struct nfs_fh_len *get_rootfh(struct svc_req *, dirpath *, int *, int v3)
 static struct option longopts[] =
 {
 	{ "foreground", 0, 0, 'F' },
-	{ "descriptors", 0, 0, 'o' },
+	{ "descriptors", 1, 0, 'o' },
 	{ "debug", 1, 0, 'd' },
 	{ "help", 0, 0, 'h' },
 	{ "exports-file", 1, 0, 'f' },
@@ -483,6 +483,13 @@ main(int argc, char **argv)
 	sigaction(SIGTERM, &sa, NULL);
 	/* WARNING: the following works on Linux and SysV, but not BSD! */
 	sigaction(SIGCHLD, &sa, NULL);
+
+	/* Daemons should close all extra filehandles ... *before* RPC init. */
+	if (!foreground) {
+		int fd = sysconf (_SC_OPEN_MAX);
+		while (--fd > 2)
+			(void) close(fd);
+	}
 
 	if (nfs_version & 0x1)
 		rpc_init("mountd", MOUNTPROG, MOUNTVERS,

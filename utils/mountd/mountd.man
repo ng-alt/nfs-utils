@@ -42,7 +42,7 @@ syntax.
 For every mount request received from an NFS client,
 .B rpc.mountd
 adds an entry to the
-.B /var/state/nfs/rmtab
+.B /var/lib/nfs/rmtab
 file. When receiving an unmount request, that entry is removed.
 user level part of the NFS service.
 .P
@@ -93,10 +93,10 @@ Don't advertise TCP for mount.
 .B \-P
 Ignored (compatibility with unfsd??).
 .TP
-.B \-p " or " \-\-port
+.B \-p " or " \-\-port num
 Force
 .B rpc.mountd
-to bind to the specified port, instead of using the random port
+to bind to the specified port num, instead of using the random port
 number assigned by the portmapper.
 .TP
 .B \-V " or " \-\-nfs-version
@@ -125,13 +125,10 @@ mountd: .bar.com
 
 You have to use the daemon name 
 .B mountd
-for the daemon name (even if the binary has a different name). For the
-client names you can only use the keyword ALL or IP addresses (NOT
-host or domain names).
+for the daemon name (even if the binary has a different name).
 
 For further information please have a look at the
-.BR tcpd (8),
-.BR hosts_allow (5)
+.BR tcpd (8)
 and
 .BR hosts_access (5)
 manual pages.
@@ -143,6 +140,6 @@ manual pages.
 .BR rpc.rquotad (8).
 .SH FILES
 .BR /etc/exports ,
-.BR /var/state/nfs/xtab .
+.BR /var/lib/nfs/xtab .
 .SH AUTHOR
 Olaf Kirch, H. J. Lu, G. Allan Morris III, and a host of others.

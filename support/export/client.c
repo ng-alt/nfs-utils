@@ -57,8 +57,17 @@ client_lookup(char *hname, int canonical)
 		hp = gethostbyaddr(hp2->h_addr, hp2->h_length,
 				   hp2->h_addrtype);
 		if (hp) {
-			free(hp2);
 			hp = hostent_dup(hp);
+			/* but now we might not have all addresses... */
+			if (hp2->h_addr_list[1]) {
+				struct hostent *hp3 =
+					gethostbyname(hp->h_name);
+				if (hp3) {
+					free(hp);
+					hp = hostent_dup(hp3);
+				}
+			}
+			free(hp2);
 		} else
 			hp = hp2;
 
@@ -70,7 +79,7 @@ client_lookup(char *hname, int canonical)
 		}
 	} else {
 		for (clp = clientlist[htype]; clp; clp = clp->m_next) {
-			if (strcmp(hname, clp->m_hostname)==0)
+			if (strcasecmp(hname, clp->m_hostname)==0)
 				break;
 		}
 	}

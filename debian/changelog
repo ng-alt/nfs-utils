@@ -1,3 +1,95 @@
+nfs-utils (1:1.0-2) unstable; urgency=low
+
+  * Fail an export if its mapping option is unsupported.  (closes: #85678)
+
+ -- Chip Salzenberg <chip@debian.org>  Wed,  2 Jan 2002 15:52:37 -0800
+
+nfs-utils (1:1.0-1) unstable; urgency=medium
+
+  * New upstream version.  (Version number is only change.)
+  * Urgency "medium" so woody users see the pretty new version number.
+    (Yeah, it's shallow... but, doggone it, this is mature code.)
+
+ -- Chip Salzenberg <chip@debian.org>  Wed, 26 Dec 2001 20:21:15 -0800
+
+nfs-utils (1:0.3.3-6) unstable; urgency=high
+
+  * Upstream fixes:
+    > Ignore case when comparing host names.
+    > Use all addresses of multi-homed hosts in export processing.
+    > When reading /proc/fs/nfs/exports, assume noasync and nowgather;
+      older kernels did so, while newer kernels report them explicitly.
+    > Remove man page refs to "hosts_allow(5)".  (closes: #122540)
+    > In exports.5: Emphasize the need for options to immediately follow
+      client names.  Explain that wildcards don't usually work on addresses,
+      but may work when reverse DNS fails. (closes: #118040, #116039)
+
+ -- Chip Salzenberg <chip@debian.org>  Wed, 26 Dec 2001 18:54:35 -0800
+
+nfs-utils (1:0.3.3-5) unstable; urgency=high
+
+  * Keep NFS fully operational during upgrade.  (closes: #76544)
+  * When calling update-rc.d, send stdout to /dev/null, but not stderr.
+
+ -- Chip Salzenberg <chip@debian.org>  Thu, 13 Dec 2001 18:50:47 -0800
+
+nfs-utils (1:0.3.3-4) unstable; urgency=high
+
+  * High priority due to changes in previous version.
+  * Upstream fixes:
+    > Close filehandles in nfsd before spawing kernel threads.  This is a
+      workaround for a kernel bug.  (closes: #121213)
+    > Document that both host names *and* addresses are checked with tcpwrappers.
+      This is a doc update, not a change.  (closes: #108493)
+    > Don't assume that strings starting with digits are IP addresses;
+      host names are allowed to start with digits.  (closes: #68977)
+  * German template for nfs-common.  (closes: #120939)
+
+ -- Chip Salzenberg <chip@debian.org>  Mon, 26 Nov 2001 11:50:43 -0800
+
+nfs-utils (1:0.3.3-3) unstable; urgency=low
+
+  * Upstream fixes:
+    > Accept obsolete mount option "crossmnt" for parsing old xtab files
+      after upgrade.  (closes: #78801)
+    > Put filenames into more error messages.
+  * Stop debconf before starting nfsd to avoid a hang.  Kernel threads
+    like nfsd aren't supposed to inherit open files from the programs that
+    start them, but nfsd does.  See debconf tutorial.  (closes: #115817)
+  * Rebuild with current glibc.  (closes: #119545)
+  * Carefully account for ownership of /var/lib/nfs/*.  (closes: #117258)
+  * Warn about statd using tcpwrappers.  (closes: #92666)
+  * Only warn about mountd's tcpwrappers name change if the old name
+    appears in the tcpwrapper config files.
+  * German template for nfs-kernel-server.  (closes: #117196)
+
+ -- Chip Salzenberg <chip@debian.org>  Wed, 21 Nov 2001 18:30:36 -0800
+
+nfs-utils (1:0.3.3-2) unstable; urgency=high
+
+  * The "Test It Before Release, Stupid" release.
+  * Repair total failure of rpc.mountd.  (closes: #115095)
+
+ -- Chip Salzenberg <chip@debian.org>  Thu, 11 Oct 2001 13:03:45 -0700
+
+nfs-utils (1:0.3.3-1) unstable; urgency=medium
+
+  * The "Life Goes On" release.
+  * New upstream version.  (closes: #113042)
+    > Avoid DNS when unexporting... important for shutdown.
+    > Recognize double-quote and \octal quoting in pathnames.
+    > Print pathnames with \octal quoting as necessary.
+  * Depend on a version of glibc that restores rpcinfo to its rightful
+    place.  (closes: #102400)
+  * Fix pathname in mountd doc.  (closes: #112088)
+  * debian/nfs-kernel-server.postinst: Remove rc.d symlinks to old
+    nfs-server init script, which doesn't realize when it's been removed.
+    (closes: #97099)
+  * Warn users about "rpc.mountd" -> "mountd" in /etc/hosts.{allow,deny}.
+    This marks my first use of debconf!  W00T!  (closes: #92671)
+
+ -- Chip Salzenberg <chip@debian.org>  Mon,  8 Oct 2001 15:04:08 -0700
+
 nfs-utils (1:0.3.2-2) unstable; urgency=low
 
   * Rebuild with new libc.  (closes: #97252, #97455, #99829, #100317)
@@ -214,6 +306,3 @@ nfs-utils (0.1.3-1) unstable; urgency=low
 
  -- Chip Salzenberg <chip@valinux.com>  Fri,  3 Dec 1999 20:00:00 -0800
 
-Local variables:
-mode: debian-changelog
-End:

@@ -4,12 +4,10 @@
 
 case "$1" in
     configure)
-	update-rc.d nfs-common defaults 19 81 >/dev/null 2>&1
-
-	/etc/init.d/nfs-common start
-	;;
-
-    *)
-	/etc/init.d/nfs-common start
+	update-rc.d nfs-common defaults 19 81 >/dev/null
 	;;
 esac
+
+act="restart"
+[ "$1:$2" = "configure:" ] && act="start"
+/etc/init.d/nfs-common $act
