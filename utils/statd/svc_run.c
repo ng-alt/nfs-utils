@@ -88,6 +88,9 @@ my_svc_run(void)
 		if (svc_stop)
 			return;
 		if (re_notify) {
+			change_state();
+			dprintf(N_DEBUG, "Notifying...(new state %d)",
+								MY_STATE);
 			notify_hosts();
 			re_notify = 0;
 		}
@@ -107,7 +110,9 @@ my_svc_run(void)
 							tv.tv_sec);
 			selret = select(FD_SETSIZE, &readfds,
 				(void *) 0, (void *) 0, &tv);
-		} else {
+		} else if (run_mode & MODE_NOTIFY_ONLY)
+			return;
+		else {
 			dprintf(N_DEBUG, "Waiting for client connections.");
 			selret = select(FD_SETSIZE, &readfds,
 				(void *) 0, (void *) 0, (struct timeval *) 0);

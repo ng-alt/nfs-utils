@@ -1,3 +1,35 @@
+2004-12-10 NeilBrown <neilb@cse.unsw.edu.au>
+	Release 1.0.7-pre2
+	
+	* config.mk, configure.in: update version number, run autoconf
+	
+2004-12-10 Neil Brown <neilb@cse.unsw.edu.au>
+	* README : note dependancy on kerberos, libevent, and nfsidmap
+	* configure.in : fail if --enable-nfsv4 and libevent or
+	libnfsidmap are missing.
+	* configuyre.in: improve message if krb5 support is missing
+	
+2004-12-06 Paul Clements <paul.clements@steeleye.com>	
+	* support/include/ha-callout.h: get return status from waitpid
+	correctly. 
+	* support/include/ha-callout.h: don't ignore SIGCHLD while waiting
+	for a callout to complete.
+	* utils/statd/statd.c(sigusr): print current start when re-reading
+	notify list due to SIGUSR1
+	* utils/statd/svc_run.c(my_svc_run): call change_state when
+	re-notifying clients.
+	
+2004-12-06 Marc Eshel <eshel@almaden.ibm.com>
+	* utils/statd/svc_run.c(my_svc_run): allow loop to exit when in
+	MODE_NOTIFY_ONLY
+	*utils/statd/rmtcall.c(statd_get_socket): if a hostname is given
+	to statd with -n, prefer it's IP address to the default for
+	listening on.
+	
+2004-12-06 Bruce Allan <bwa@us.ibm.com>
+	* utils/mountd/auth.c(auth_reload)  Clear the "my_client" cache on
+	an auth_reload to avoid old data getting used.
+	
 2004-12-03 NeilBrown <neilb@cse.unsw.edu.au>
 	Release 1.0.7-pre1 for testing
 	
