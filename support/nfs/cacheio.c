@@ -19,6 +19,10 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <time.h>
 
 void qword_add(char **bpp, int *lp, char *str)
 {
@@ -214,3 +218,51 @@ int readline(int fd, char **buf, int *lenp)
 	return 1;
 }
 
+
+/* Check if we should use the new caching interface
+ * This succeeds iff the "nfsd" filesystem is mounted on
+ * /proc/fs/nfs
+ */
+int
+check_new_cache(void)
+{
+	struct stat stb;
+	return (stat("/proc/fs/nfs/filehandle", &stb) == 0);
+}	
+
+
+/* flush the kNFSd caches.
+ * Set the flush time to the mtime of _PATH_ETAB or
+ * if force, to now.
+ * the caches to flush are:
+ *  auth.unix.ip nfsd.export nfsd.fh
+ */
+
+void
+cache_flush(int force)
+{
+	struct stat stb;
+	int c;
+	char stime[20];
+	char path[200];
+	static char *cachelist[] = {
+		"auth.unix.ip",
+		"nfsd.export",
+		"nfsd.fh",
+		NULL
+	};
+	stb.st_mtime = time(0);
+	if (!force)
+		stat(_PATH_ETAB, &stb);
+	
+	sprintf(stime, "%ld\n", stb.st_mtime);
+	for (c=0; cachelist[c]; c++) {
+		int fd;
+		sprintf(path, "/proc/net/rpc/%s/flush", cachelist[c]);
+		fd = open(path, O_RDWR);
+		if (fd) {
+			write(fd, stime, strlen(stime));
+			close(fd);
+		}
+	}
+}

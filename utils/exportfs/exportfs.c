@@ -42,12 +42,14 @@ main(int argc, char **argv)
 	int	f_reexport = 0;
 	int	f_ignore = 0;
 	int	i, c;
+	int	new_cache = 0;
+	int	force_flush = 0;
 
 	xlog_open("exportfs");
 
 	export_errno = 0;
 
-	while ((c = getopt(argc, argv, "aio:ruv")) != EOF) {
+	while ((c = getopt(argc, argv, "aio:ruvf")) != EOF) {
 		switch(c) {
 		case 'a':
 			f_all = 1;
@@ -67,6 +69,9 @@ main(int argc, char **argv)
 			break;
 		case 'v':
 			f_verbose = 1;
+			break;
+		case 'f':
+			force_flush = 1;
 			break;
 		default:
 			usage();
@@ -92,6 +97,8 @@ main(int argc, char **argv)
 		return 0;
 	}
 
+	new_cache = check_new_cache();
+
 	if (f_export && ! f_ignore)
 		export_read(_PATH_EXPORTS);
 	if (f_export) {
@@ -116,10 +123,15 @@ main(int argc, char **argv)
 				unexportfs(argv[i], f_verbose);
 		rmtab_read();
 	}
-	xtab_mount_read();
-	exports_update(f_verbose);
+	if (!new_cache) {
+		xtab_mount_read();
+		exports_update(f_verbose);
+	}
 	xtab_export_write();
-	xtab_mount_write();
+	if (new_cache)
+		cache_flush(force_flush);
+	if (!new_cache)
+		xtab_mount_write();
 
 	return export_errno;
 }
@@ -135,6 +147,16 @@ exports_update(int verbose)
 	nfs_export 	*exp;
 
 	for (exp = exportlist[MCL_FQDN]; exp; exp=exp->m_next) {
+		/* check mountpoint option */
+		if (exp->m_mayexport && 
+		    exp->m_export.e_mountpoint &&
+		    !is_mountpoint(exp->m_export.e_mountpoint[0]?
+				   exp->m_export.e_mountpoint:
+				   exp->m_export.e_path)) {
+			printf("%s not exported as %s not a mountpoint.\n",
+			       exp->m_export.e_path, exp->m_export.e_mountpoint);
+			exp->m_mayexport = 0;
+		}
 		if (exp->m_mayexport && ((exp->m_exported<1) || exp->m_changed)) {
 			if (verbose)
 				printf("%sexporting %s:%s to kernel\n",
@@ -261,25 +283,32 @@ unexportfs(char *arg, int verbose)
 	for (exp = exportlist[htype]; exp; exp = exp->m_next) {
 		if (path && strcmp(path, exp->m_export.e_path))
 			continue;
-		if (htype != exp->m_client->m_type
-		    || (htype == MCL_FQDN
-		        && !matchhostname(exp->m_export.e_hostname,
-					  hname)))
+		if (htype != exp->m_client->m_type)
+			continue;
+		if (htype == MCL_FQDN
+		    && !matchhostname(exp->m_export.e_hostname,
+					  hname))
+			continue;
+		if (htype != MCL_FQDN
+		    && strcasecmp(exp->m_export.e_hostname, hname))
 			continue;
 		if (verbose) {
+#if 0
 			if (exp->m_exported) {
 				printf("unexporting %s:%s from kernel\n",
 				       exp->m_client->m_hostname,
 				       exp->m_export.e_path);
 			}
-			else {
+			else
+#endif
 				printf("unexporting %s:%s\n",
 					exp->m_client->m_hostname, 
 					exp->m_export.e_path);
-			}
 		}
+#if 0
 		if (exp->m_exported && !export_unexport(exp))
 			error(exp, errno);
+#endif
 		exp->m_xtabent = 0;
 		exp->m_mayexport = 0;
 	}
@@ -333,8 +362,10 @@ dump(int verbose)
 				c = dumpopt(c, "async");
 			if (ep->e_flags & NFSEXP_GATHERED_WRITES)
 				c = dumpopt(c, "wdelay");
-			if (ep->e_flags & NFSEXP_CROSSMNT)
+			if (ep->e_flags & NFSEXP_NOHIDE)
 				c = dumpopt(c, "nohide");
+			if (ep->e_flags & NFSEXP_CROSSMNT)
+				c = dumpopt(c, "crossmnt");
 			if (ep->e_flags & NFSEXP_INSECURE_PORT)
 				c = dumpopt(c, "insecure");
 			if (ep->e_flags & NFSEXP_ROOTSQUASH)
@@ -349,6 +380,10 @@ dump(int verbose)
 				c = dumpopt(c, "insecure_locks");
 			if (ep->e_flags & NFSEXP_FSID)
 				c = dumpopt(c, "fsid=%d", ep->e_fsid);
+			if (ep->e_mountpoint)
+				c = dumpopt(c, "mountpoint%s%s", 
+					    ep->e_mountpoint[0]?"=":"", 
+					    ep->e_mountpoint);
 			if (ep->e_maptype == CLE_MAP_UGIDD)
 				c = dumpopt(c, "mapping=ugidd");
 			else if (ep->e_maptype == CLE_MAP_FILE)

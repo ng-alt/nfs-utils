@@ -91,6 +91,7 @@ getexportent(int fromkernel, int fromexports)
 	ee.e_anongid = -2;
 	ee.e_squids = NULL;
 	ee.e_sqgids = NULL;
+	ee.e_mountpoint = NULL;
 	ee.e_nsquids = 0;
 	ee.e_nsqgids = 0;
 
@@ -170,8 +171,10 @@ putexportent(struct exportent *ep)
 	fprintf(fp, "%ssync,", (ep->e_flags & NFSEXP_ASYNC)? "a" : "");
 	fprintf(fp, "%swdelay,", (ep->e_flags & NFSEXP_GATHERED_WRITES)?
 				"" : "no_");
-	fprintf(fp, "%shide,", (ep->e_flags & NFSEXP_CROSSMNT)?
+	fprintf(fp, "%shide,", (ep->e_flags & NFSEXP_NOHIDE)?
 				"no" : "");
+	fprintf(fp, "%scrossmnt,", (ep->e_flags & NFSEXP_CROSSMNT)?
+				"" : "no");
 	fprintf(fp, "%ssecure,", (ep->e_flags & NFSEXP_INSECURE_PORT)?
 				"in" : "");
 	fprintf(fp, "%sroot_squash,", (ep->e_flags & NFSEXP_ROOTSQUASH)?
@@ -185,6 +188,10 @@ putexportent(struct exportent *ep)
 	if (ep->e_flags & NFSEXP_FSID) {
 		fprintf(fp, "fsid=%d,", ep->e_fsid);
 	}
+	if (ep->e_mountpoint)
+		fprintf(fp, "mountpoint%s%s,",
+			ep->e_mountpoint[0]?"=":"", ep->e_mountpoint);
+
 	fprintf(fp, "mapping=");
 	switch (ep->e_maptype) {
 	case CLE_MAP_IDENT:
@@ -245,6 +252,8 @@ dupexportent(struct exportent *dst, struct exportent *src)
 		dst->e_sqgids = (int *) xmalloc(n * sizeof(int));
 		memcpy(dst->e_sqgids, src->e_sqgids, n * sizeof(int));
 	}
+	if (src->e_mountpoint)
+		dst->e_mountpoint = strdup(src->e_mountpoint);
 }
 
 struct exportent *
@@ -258,6 +267,7 @@ mkexportent(char *hname, char *path, char *options)
 	ee.e_anongid = -2;
 	ee.e_squids = NULL;
 	ee.e_sqgids = NULL;
+	ee.e_mountpoint = NULL;
 	ee.e_nsquids = 0;
 	ee.e_nsqgids = 0;
 
@@ -333,12 +343,12 @@ parseopts(char *cp, struct exportent *ep, int warn)
 			had_sync_opt = 1;
 			ep->e_flags |= NFSEXP_ASYNC;
 		} else if (!strcmp(opt, "nohide"))
-			ep->e_flags |= NFSEXP_CROSSMNT;
+			ep->e_flags |= NFSEXP_NOHIDE;
 		else if (!strcmp(opt, "hide"))
-			ep->e_flags &= ~NFSEXP_CROSSMNT;
-		else if (!strcmp(opt, "crossmnt"))		/* old style */
+			ep->e_flags &= ~NFSEXP_NOHIDE;
+		else if (!strcmp(opt, "crossmnt"))
 			ep->e_flags |= NFSEXP_CROSSMNT;
-		else if (!strcmp(opt, "nocrossmnt"))		/* old style */
+		else if (!strcmp(opt, "nocrossmnt"))
 			ep->e_flags &= ~NFSEXP_CROSSMNT;
 		else if (!strcmp(opt, "wdelay"))
 			ep->e_flags |= NFSEXP_GATHERED_WRITES;
@@ -406,6 +416,15 @@ bad_option:
 				goto bad_option;
 			}
 			ep->e_flags |= NFSEXP_FSID;
+		} else if (strcmp(opt, "mountpoint")==0 ||
+			   strcmp(opt, "mp") == 0 ||
+			   strncmp(opt, "mountpoint=", 11)==0 ||
+			   strncmp(opt, "mp=", 3) == 0) {
+			char * mp = strchr(opt, '=');
+			if (mp)
+				ep->e_mountpoint = strdup(mp+1);
+			else
+				ep->e_mountpoint = strdup("");
 		} else {
 			xlog(L_ERROR, "%s:%d: unknown keyword \"%s\"\n",
 					flname, flline, opt);

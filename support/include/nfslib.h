@@ -73,6 +73,7 @@ struct exportent {
 	int *		e_sqgids;
 	int		e_nsqgids;
 	int		e_fsid;
+	char *		e_mountpoint;
 };
 
 struct rmtabent {
@@ -126,6 +127,11 @@ void qword_print(FILE *f, char *str);
 void qword_printhex(FILE *f, char *str, int slen);
 void qword_printint(FILE *f, int num);
 void qword_eol(FILE *f);
+int readline(int fd, char **buf, int *lenp);
+int qword_get(char **bpp, char *dest, int bufsize);
+int qword_get_int(char **bpp, int *anint);
+void cache_flush(int force);
+int check_new_cache(void);
 
 /* lockd. */
 int			lockdsvc();

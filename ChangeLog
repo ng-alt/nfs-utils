@@ -1,3 +1,177 @@
+	
+2003-07-03 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/exportfs/nfsd.man: new man page for nfsd filesystem. Also
+	assorted changed to cope with section 7 of the manual.
+	* configure.in, nfs-utils.spec: Update version to 1.0.4
+	* run autoconf
+
+	This is a 'pre-release' for 1.1.0  Hopefully 1.1.0 will be the
+	baseline for 2.6 and 2.8.  I.e. it should continue to work right
+	through the 2.8 (or 3.0) kernel series.  Previous releases wont.
+
+2003-07-04 NeilBrown <neilb@cse.unsw.edu.au>	
+	Steve Dickson <SteveD@redhat.com>
+
+	statd cleanup:
+	* utils/statd/statd.c: create a pidfile with pid of statd, and
+	truncate it when statd exists.
+	* utils/statd/statd.c: drop privs by setuid to owner of SM_DIR,
+	and warn if this is root.
+	* utils/statd/statd.c: when statd forks, connect child to parent
+	with a pipe, and send a byte down the pipe once the child is
+	working properly.
+	* Makefile: create and chown sm, sm.bak, state when "make install"
+	* configure.in: add --with-statduser= option which defaults to
+	"rpcuser" or "nobody"
+	* config.mk.in: pass "statduser" through to Makefile
+	
+2003-07-03 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/include/nfs/nfs.h: Make sure correct __kernel_dev_t is
+	used as the size was changed somewhere in 2.5.60-2.5.70.  Without
+	this nfs-utils compiles against 2.6 headers will not work on a
+	2.4 kernel.	
+	
+2003-07-03 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/nfs/nfssvc.c(nfssvc): If /proc/fs/nfs/threads exists,
+	set number of threads by writing to there.  This means it will
+	still work when the syscall interface goes away in 2.7.
+
+2003-07-03 NeilBrown <neilb@cse.unsw.edu.au>
+	fumihiko kakuma <kakmy@mvh.biglobe.ne.jp>
+
+	* utils/exportfs/exportfs.c(unexportfs): improve host comparison
+	so as to only export the wildcard exports that were asked for.
+	* support/export/export.c(export_allowed): changed to return the
+	nfs_export rather than a "struct exportent", as m_changed is
+	needed by called
+	* support/export/rmtab.c(rmtab_read): modified to deal with
+	interface change for export_allowed(), and enhanced to preserve
+	m_changed flag when a wild-card export causes the creation of
+	a non-wildcard export.
+	
+2003-07-02 NeilBrown <neilb@cse.unsw.edu.au>
+	Steve Dickson <SteveD@redhat.com>
+
+	* utils/mountd/mountd.man: Add valid kinds of debugging.
+	* utils/mountd/mountd.c(main): ignore SIGPIPE
+	* utils/nfsstat/nfsstat.c: fine-tune printing of warning so
+	we don't get warnings about unavailable stats that weren't asked
+	for.
+	
+2003-06-24 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/nfs/nfsexport.c(exp_unexp): When unexporting filesystems
+	via /rpc/net/rpc/nfsd*/channel, set the expiry date to 1, not
+	'forever', so things disappear out of the cache rather than just
+	be ignored. 
+	
+2003-06-16  "J. Bruce Fields" <bfields@fieldses.org>
+
+	* utils/mountd/cache.c(nfsd_fh): don't export the export_ent
+	if it wasn't found.
+
+2003-06-16  NeilBrown	<neilb@cse.unsw.edu.au>
+
+	* debian/nfs-kernel-server.init,etc/nodist/nfs-server,
+	etc/redhat/nfs.init: when checking if V3 is supported, make sure
+	nfs server 'knows' about 127.0.0.1 first.
+	
+2003-06-10  Chip Salzenberg  <chip@pobox.com>
+
+	* support/nfs/xlog.c (xlog): Fix off-by-one buffer overflow bug.
+	* debian/changelog: Version 1.0.3-2.
+
+2003-05-30 Michael Griffith <grif@michaelgriffith.com>
+	NeilBrown <neilb@cse.unsw.edu.au>
+
+	utils/nfsstat/nfsstat.c(print_callstats): use unsigned
+	long long to avoid overflow when printing stats.
+	
+2003-05-30  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/export/export.c, support/include/nfslib.h,
+	support/nfs/export.c, utils/exportfs/exportfs.c,
+	utils/mountd/mountd.c: new export option "mountpoint"
+	If no path is given, then the export point must be a
+	mount point, or it won't be exported.  If a path is 
+	given (e.g. mountpoint=/path) then that path must be
+	a mountpoint or the exportpoint won't be exported.
+	* utils/exportfs/exportfs.man: document mountpoint option.
+	* support/misc/mountpoint.c: New file with is_mountpoint()
+	to determine if something is a mountpoint.
+	
+2003-05-23  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/cache.c(cache_get_filehandle): take a separate path
+	argument as we might not be getting the filehandle for the
+	mountpoint.
+	* utils/mountd/mountd.c(get_rootfh): pass real path when calling
+	cache_get_filehandle.
+	* utils/mountd/mountd.c(get_rootfh): check export point and
+	requested directory are on the same filesystem, and complain if
+	not.
+	
+2003-05-22  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/auth.c(auth_authenticate_internal): make sure
+	portnumber is still checked when using new cache lookup.
+	
+2003-05-21  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/exportfs/exportfs.c: Use check_new_cache and cache_flush
+	 Don't actually talk to kernel when new cache is in effect, except
+	 to flush
+	* utils/exportfs/exportfs.c: add -f option to fully flush cache.
+	* support/export/xtab.c: Only rename new xtab into place if it has
+	 changed, thus preserving modify date for exportfs to use when
+	 flushing.
+	* support/nfs/cacheio.c: Add cache_flush
+	* support/export/xtab.c: Only rename new xtab into place if it has
+	 changed, thus preserving modify date for exportfs to use when
+	 flushing.
+	
+2003-05-21  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/export/client.c: Add client_compose, client_member to
+	handle new composite client names
+	* support/include/exportfs.h: Declare above functions.
+	* utils/mountd/auth.c: use client_compose to determine calling
+	client if new cache is being used.
+	* utils/mountd/auth.c: call cache_export to export a filesystem if
+	new_cache, check if new cache is used, and call my_svc_run instead
+	of svc_run
+	* utils/mountd/svc_run.c: new file defining my_svc_run
+	* utils/mountd/cache.c: new file for handling cache upcalls.
+	* support/nfs/cacheio.c(check_new_cache): new function to check if
+	new cache should be used.
+	
+	
+2003-05-21  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/include/nfs/export.h: New CROSSMNT distinct from NOHIDE
+	* support/nfs/exports.c: Make CROSSMNT distinct from NOHIDE
+	* utils/exportfs/exportfs.c(dump): ditto
+	
+2003-05-21  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/export/hostname.c(get_reliable_hostbyaddr): new function
+	to get host name from address with full checking of authenticity.
+	* support/include/misc.h: declare above function
+	* utils/mountd/auth.c(auth_authenticate_internal): remove all
+	logic for authenticating address.
+	* utils/mountd/auth.c(auth_authenticate): call new
+	get_reliable_hostbyaddr to to hostname lookup before calling _internal.
+	
+	
+2003-03-30  NeilBrown <neilb@cse.unsw.edu.au>
+
+	* tools/rpcgen/rpc_main.c(find_cpp): removed
+	* tools/rpcgen/rpc_main.c(open_input): use execvp to find "cpp", 
+	then try hard-coded paths.
+	
 2003-03-26  Chip Salzenberg  <chip@pobox.com>
 
 	* debian/changelog: Version 1.0.3-1.
