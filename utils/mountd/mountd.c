@@ -36,6 +36,7 @@ static struct option longopts[] =
 	{ "no-nfs-version", 1, 0, 'N' },
 	{ "version", 0, 0, 'v' },
 	{ "port", 1, 0, 'p' },
+	{ "no-tcp", 0, 0, 'n' },
 	{ NULL, 0, 0, 0 }
 };
 
@@ -419,6 +420,9 @@ main(int argc, char **argv)
 		case 'N':
 			nfs_version &= ~(1 << (atoi (optarg) - 1));
 			break;
+		case 'n':
+			_rpcfdtype = SOCK_DGRAM;
+			break;
 		case 'V':
 			nfs_version |= 1 << (atoi (optarg) - 1);
 			break;
@@ -450,13 +454,13 @@ main(int argc, char **argv)
 
 	if (nfs_version & 0x1)
 		rpc_init("mountd", MOUNTPROG, MOUNTVERS,
-			 mount_dispatch, port, 0);
+			 mount_dispatch, port);
 	if (nfs_version & (0x1 << 1))
 		rpc_init("mountd", MOUNTPROG, MOUNTVERS_POSIX,
-			 mount_dispatch, port, 0);
+			 mount_dispatch, port);
 	if (nfs_version & (0x1 << 2))
 		rpc_init("mountd", MOUNTPROG, MOUNTVERS_NFSV3,
-			 mount_dispatch, port, 0);
+			 mount_dispatch, port);
 
 	sa.sa_handler = killer;
 	sigaction(SIGHUP, &sa, NULL);
@@ -499,6 +503,6 @@ usage(const char *prog, int n)
 "Usage: %s [-Fhnv] [-d kind] [-f exports-file] [-V version]\n"
 "	[-N version] [--debug kind] [-p|--port port] [--help] [--version]\n"
 "	[--exports-file=file] [--nfs-version version]\n"
-"	[--no-nfs-version version]\n", prog);
+"	[--no-nfs-version version] [--no-tcp]\n", prog);
 	exit(n);
 }

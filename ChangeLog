@@ -1,3 +1,154 @@
+2001-02-14  H.J. Lu <hjl@lucon.org>
+
+	* utils/statd/rmtcall.c: Include <time.h>.
+	* utils/statd/svc_run.c: Likewise.
+
+2001-02-14  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.3.1".
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+	* README: Updated for 0.3.1.
+
+2001-02-14  H.J. Lu <hjl@lucon.org>
+
+	* support/nfs/rpcmisc.c: Include <time.h>.
+
+2001-02-14  Chip Salzenberg  <chip@valinux.com>
+
+	* debian/control: Change priority of nhfsstone package to 'extra'.
+
+2001-02-12  Chip Salzenberg  <chip@valinux.com>
+
+	* debian/changelog: Version 0.3-2.
+
+2001-02-02  H.J. Lu <hjl@lucon.org>
+
+	* support/include/rpcmisc.h (rpc_init): Remove bufsize.
+	
+	* support/nfs/rpcmisc.c (makesock): Remove socksz and comment
+	out SO_SNDBUF/SO_RCVBUF.
+	(rpc_init): Remove bufsize and remove socksz in calls to
+	makesock ().
+
+	* utils/mountd/mountd.c (main): Remove bufsize in calls to
+	rpc_init ().
+
+2001-01-28  Chip Salzenberg  <chip@valinux.com>
+
+	* debian/changelog: Version 0.3-1.
+
+2001-01-25  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.3".
+	* configure: Regenerated.
+	* nfs-utils.spec: Likewise.
+
+	* README: Updated for 0.3.
+
+2001-01-25  H.J. Lu <hjl@lucon.org>
+
+	* utils/lockd/lockd.c (main): Ignore errno == EINVAL.
+
+2001-01-20  Chip Salzenberg  <chip@valinux.com>
+
+	* support/include/xio.h (xgetc): Declare to return int.
+	* support/nfs/xio.c (xgetc): Return int.
+	(xgettok, xskip, xskipcomment): Use int for value of xgetc.
+	* utils/statd/statd.c (main): Use int for value of getopt.
+	* debian/changelog: Version 0.2.1-5.
+	
+2000-12-10  Chip Salzenberg  <chip@valinux.com>
+
+	* utils/statd/monitor.c (sm_mon_1_svc): Fix buggy check for
+	program and procedure numbers of kernel lockd's callback.  Also,
+	besides the old (and broken) procedure #24, allow #16 per Trond.
+
+2000-12-03  Chip Salzenberg  <chip@valinux.com>
+
+	* support/nfs/xio.c (xfopen): Initialize x_line to one, not zero.
+	* debian/control: Let nhfsstone replace files in nfs-kernel-server.
+	* debian/changelog: Version 0.2.1-4.
+
+2000-11-27  Tobias Ringstrom <tori@tellus.mine.nu>
+
+	* utils/mountd/auth.c (auth_authenticate): Log the bad path
+	warning.
+
+2000-11-24  Neil Brown <neilb@cse.unsw.edu.au>
+
+        * support/nfs/exports.c (getexportent): Check for host name
+	without option, or options without hostname, and print a warning,
+	as this is most likely a typo.
+
+2000-11-19  Chip Salzenberg  <chip@valinux.com>
+
+	* debian/control: Add dependency on portmap.
+	* debian/changelog: Version 0.2.1-3.
+
+2000-11-10  H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec.in: Don't use libtool.
+	Add ChangeLog and COPYING to doc.
+	* nfs-utils.spec: Rebuild.
+
+2000-11-09  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init (start): Back out the last change.
+
+2000-11-09  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init (start): Pass --no-tcp to mountd if
+	TCP is not supported by kernel.
+
+	* support/nfs/rpcmisc.c (rpc_init): Don't set _rpcfdtype to 0.
+
+	* utils/mountd/mountd.c (longopts): Add "-n/--no-tcp".
+	(main): Set to _rpcfdtype to SOCK_DGRAM for "-n/--no-tcp".
+
+	* utils/mountd/mountd.man: Updated for "-n/--no-tcp".
+
+2000-10-24  Lon Hohberger <hohberger@missioncriticallinux.com>
+
+	* utils/statd/callback.c: Fix bug preventing callbacks to local lockd.
+	* utils/statd/rmtcall.c: Add some IP address paranoia when doing
+	callbacks to local lockd.
+
+2000-10-18  Scott McDermott <mcdermot@questra.com>
+
+	* utils/exportfs/exports.man: Updated for CIDR netmask.
+
+2000-10-17  Scott McDermott <mcdermot@questra.com>
+
+	* support/export/client.c (client_init): Support CIDR netmask
+	in /etc/exports.
+
+2000-10-11  H.J. Lu <hjl@lucon.org>
+
+	* aclocal.m4 (AC_TCP_WRAPPER): Fix a typo.
+	* configure: Rebuilt.
+
+2000-10-06  Lon Hohberger <hohberger@missioncriticallinux.com>
+
+	* utils/statd/statd.man: Change "/var/lib/nfs/sm/state" to
+	"/var/lib/nfs/state".
+
+2000-10-05  Lon Hohberger <hohberger@missioncriticallinux.com>
+
+	* utils/statd/statd.h (run_mode): New global bitmask of runtime
+	behaviors: fg/bg, logging, etc.
+	* utils/statd/statd.c: New command line options: -V -h -? -d .
+	* utils/statd/statd.man: Update for changes to statd.
+
+	* utils/statd/log.h (log_init): Remove parameter of function; use
+	global variable "name_p" instead.
+	* utils/statd/log.c: Add support for logging to stderr.
+
+	* utils/statd/notlist.c: Partially rewrite notify list handling
+	functions.  Eliminate run-off-end-of-list bug when calling
+	nlist_insert_timer.  Add lots of comments.
+	
 2000-09-27  H.J. Lu <hjl@lucon.org>
 
 	* README: Updated for RedHat 7.0.

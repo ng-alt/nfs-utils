@@ -29,10 +29,11 @@
 #include <memory.h>
 #include <errno.h>
 #include <unistd.h>
+#include <time.h>
 #include "nfslib.h"
 
 static void	closedown(int sig);
-static int	makesock(int port, int proto, int socksz);
+static int	makesock(int port, int proto);
 
 #define _RPCSVC_CLOSEDOWN	120
 int	_rpcpmstart = 0;
@@ -40,8 +41,7 @@ int	_rpcfdtype = 0;
 int	_rpcsvcdirty = 0;
 
 void
-rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport,
-							int bufsiz)
+rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport)
 {
 	struct sockaddr_in saddr;
 	SVCXPRT	*transp;
@@ -50,9 +50,9 @@ rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport,
 
 	asize = sizeof(saddr);
 	sock = 0;
-	_rpcfdtype = 0;
 	if (getsockname(0, (struct sockaddr *) &saddr, &asize) == 0) {
 		int ssize = sizeof (int);
+		_rpcfdtype = 0;
 		if (saddr.sin_family != AF_INET)
 			xlog(L_FATAL, "init: stdin is bound to non-inet addr");
 		if (getsockopt(0, SOL_SOCKET, SO_TYPE,
@@ -73,7 +73,7 @@ rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport,
 				transp = last_transp;
 				goto udp_transport;
 			}
-			if ((sock = makesock(defport, IPPROTO_UDP, bufsiz)) < 0) {
+			if ((sock = makesock(defport, IPPROTO_UDP)) < 0) {
 				xlog(L_FATAL, "%s: cannot make a UDP socket\n",
 						name);
 			}
@@ -99,7 +99,7 @@ rpc_init(char *name, int prog, int vers, void (*dispatch)(), int defport,
 				transp = last_transp;
 				goto tcp_transport;
 			}
-			if ((sock = makesock(defport, IPPROTO_TCP, bufsiz)) < 0) {
+			if ((sock = makesock(defport, IPPROTO_TCP)) < 0) {
 				xlog(L_FATAL, "%s: cannot make a TCP socket\n",
 						name);
 			}
@@ -145,10 +145,9 @@ int sig;
 	(void) alarm(_RPCSVC_CLOSEDOWN);
 }
 
-static int makesock(port, proto, socksz)
+static int makesock(port, proto)
 int port;
 int proto;
-int socksz;
 {
 	struct sockaddr_in sin;
 	int	s;
@@ -171,6 +170,9 @@ int socksz;
 	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0)
 		xlog(L_ERROR, "setsockopt failed: %s\n", strerror(errno));
 
+#if 0
+	/* I was told it didn't work with gigabit ethernet.
+	   Don't bothet with it.  H.J. */
 #ifdef SO_SNDBUF
 	{
 		int sblen, rblen;
@@ -182,6 +184,7 @@ int socksz;
 			xlog(L_ERROR, "setsockopt failed: %s\n", strerror(errno));
 	}
 #endif				/* SO_SNDBUF */
+#endif
 
 	if (bind(s, (struct sockaddr *) &sin, sizeof(sin)) == -1) {
 		xlog(L_FATAL, "Could not bind name to socket: %s\n",

@@ -19,15 +19,17 @@ Description: Kernel NFS server support
  Upstream: SourceForge project "nfs", CVS module nfs-utils.
 
 Package: nhfsstone
+Priority: extra
 Architecture: any
 Depends: nfs-common, ${shlibs:Depends}
+Replaces: nfs-kernel-server
 Description: NFS benchmark program.
  .
  Upstream: SourceForge project "nfs", CVS module nfs-utils.
 
 Package: nfs-common
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: portmap, ${shlibs:Depends}
 Provides: nfs-client
 Conflicts: nfs-client
 Replaces: nfs-client
