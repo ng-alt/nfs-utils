@@ -1,3 +1,127 @@
+2004-12-03 NeilBrown <neilb@cse.unsw.edu.au>
+	Release 1.0.7-pre1 for testing
+	
+	* config.mk, configure.in: update version number, run autoconf
+	
+2004-12-03 Trond Myklebust <trond.myklebust@fys.uio.no>
+
+	* utils/statd/statd.c(main): ignore SIGPIPE
+	
+2004-11-22 "J. Bruce Fields" <bfields@fieldses.org>
+
+	* tools/rpcdebug/rpcdebug.c: support aliases "nfsdebug" and
+	"nfsddebug" and update flag names.
+	* configure.in, nodist/* redhat/* nfs-utils.spec*: remove redhat
+	specific files (as no-one actually uses them, especially not
+	redhat), and the nodist /etc files (as they drift out-of-date, and
+	the debian directory provides a suitable example.
+	* utils/svcgssd_proc.c(get_ids): fix memory leak
+	* utils/svcgssd/svcgssd_proc.c: Rely on count of the number of
+	groups instead of using a special guard value to identify the end
+	of the list. 
+	* utils/idmapd/idmapd.c: don't allow Default domain and anon-uid
+	or -gid to be specified on command line.
+	* utils/idmapd/idmapd.c: improve error messages
+	* utils/idmapd/idmapd.c: Reopen nfsd files on sighup.  Allows us
+	to start up client side only (even when nfsd module not loaded),
+	and then sighup later after insmodding nfsd module. 
+	* utils/idmapd/idmapd.c: Make sure we catch all errors on
+	daemonizing by waiting for child to report succesfull startup
+	using a pipe. 
+	* utils/idmapd/idmapd.c: Let libnfsidmapd parse the idmapd.conf
+	file for the default domain, instead of doing that ourselves.
+	* utils/gssd/gssd_proc.c: Make sure we get an error when a gssd
+	downcall fails. 
+	* utils/gssd/gssd_proc.c: We were forgetting to restore the euid
+	on certain failures, which meant gssd could get stuck in a state
+	where it didn't have permissions to read the files in rpc_pipefs
+	that it needed to. 
+	* utils/gssd/gssd_proc.c: Use libnfsidmapd to map gss principals
+	to uids. 
+	* debian/nfs-kernel-server.default: Document the NEED_SVCGSSD
+	variable in /etc/default/nfs-kernel-server. 
+
+	
+2004-11-22 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/exportfs/nfsd.man: corrected typo in .BR macro usage -
+	reported by Eric Raymond
+	
+2004-10-19 "J. Bruce Fields" <bfields@fieldses.org>
+
+	* support/gssapi/* support/rpc/* utils/gssd/* utils/svcgssd/* etc
+	initial support for GSSAPI authentication
+	
+2004-09-15 Neil Brown <neilb@cse.unsw.edu.au>
+
+	* utils/statd/monitor.c(sm_unmon_1_svc): is RESTRICTED_STATD, then
+	check IP address and force my_name to 127.0.0.1 to match 
+	what happens in sm_mon_1_svc.  This avoid spurious "erroneous
+	SM_UNMON" messages.
+	* utils/statd.monitor.c(sm_unmon_all_1_svc): likewise
+	
+2004-09-15 "J. Bruce Fields" <bfields@fieldses.org>	
+
+	* Assorted changes to support "gss/*" style authentication
+	* utils/idmapd: new idmapd daemon for nfsv4 username lookup
+	
+2004-09-06 Trond Myklebust <trond.myklebust@fys.uio.no>
+	Neil Brown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/auth.c(auth_authenticate_internal): fix
+	uninitialsed variable problem (causes bad error messages).
+
+2004-09-06 Paul Clements <paul.clements@steeleye.com>
+	Neil Brown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/mountd.c(main): support --ha-callout (-H) for
+	specifying a callout program
+	* utils/mountd/rmtab.c: Call ha_callout on mount/unmount
+	* utils/statd/monitor.c: Call ha_callout on add/del client
+	* utils/statd/rmtcall.c: as above
+	* utils/statd/statd.c: handle --ha-callout (-H)
+	* utils/statd/svc_run.c: call notify_hosts is we have received a
+	sighup
+	* support/include/ha-callout.h: define ha_callout function
+	 
+	
+2004-08-31 NeilBrown <neilb@cse.unsw.edu.au>
+	* utils/mountd/cache.c(cache_process_req): clear fd after
+	processing so as not to confused libc/sunrpc into thinking
+	it need to do something with that fd.
+	
+2004-08-31 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* debian/nfs-kernel-server.init(start,stop) mount the nfsd
+	filesystem, if available, before starting nfs services, and 
+	unmount it afterwards.
+	* etc/nodist/nfs-server: ditto
+	* etc/redhat/nfs.init: likewise
+	* etc/redhat/nfs: add "MOUNT_NFSD" flag to control above.
+	
+2004-06-08 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/exportfs/exportfs.c: Don't rmtab_read if new_cache, it
+	  isn't necessary.
+	* support/nfs/cacheio.c(cache_flush): Change order in which caches
+	  are flushed so that dependancies don't keep things in the cache
+	  too long.
+	
+2004-03-18  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 1.0.6-2.
+
+2004-02-24 NeilBrown <neilb@cse.unsw.edu.au>
+	from "J. Bruce Fields" <bfields@fieldses.org>
+
+	* utils/mountd/cache.c: call auth_reload to make sure auth data is
+	current before responding to kernel upcall.
+	
+2004-02-24 NeilBrown <neilb@cse.unsw.edu.au>
+	Based on patch from  Greg Banks <gnb@melbourne.sgi.com>
+
+	* utils/exportfs/exports.man: Document fsid= option.
+	
 2003-09-15 NeilBrown <neilb@cse.unsw.edu.au>
 
 	Release 1.0.6
@@ -8,7 +132,7 @@
 	utils/statd/Makefile: add "predep" rule so that "make dep" works.
 	* Makefile: allow a simple "make" to run ./configure and "make dep"
 	if needed.
-	* configure.in, nfs-utils.spec: Update version to 1.0.4
+	* configure.in, nfs-utils.spec: Update version to 1.0.6
 	* run autoconf
 	
 2003-09-12  Chip Salzenberg  <chip@pobox.com>
