@@ -1,3 +1,89 @@
+2003-09-15 NeilBrown <neilb@cse.unsw.edu.au>
+
+	Release 1.0.6
+
+	* rules.mk: Add dep: rule when no OBJS, so "make dep" works in
+	support/include, and depend in "predep"
+	* support/export/Makefile, tools/rpcgen/Makefile,
+	utils/statd/Makefile: add "predep" rule so that "make dep" works.
+	* Makefile: allow a simple "make" to run ./configure and "make dep"
+	if needed.
+	* configure.in, nfs-utils.spec: Update version to 1.0.4
+	* run autoconf
+	
+2003-09-12  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 1.0.6-1.
+
+2003-09-12 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/mountd.c(main): Impose FD_SETSIZE as an upper limit
+	for RLIMIT_NOFILE
+	* utils/statd/statd.c(main): Ditto.
+
+	   michael <michael@newdream.net> discovered that svc_setreqsize
+	   in glibc can segfault if RLIMIT_NOFILE is bigger than
+	   FD_SETSIZE, so a simple solution is to impose a hard limit.
+
+2003-09-09  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 1.0.5-3.
+	* support/export/hostname.c (get_reliable_hostbyaddr): Fix crash
+	on invalid reverse DNS.
+	* utils/showmount/showmount.c (main): Fix inet_ntoa() parameter.
+	* tools/rpcgen/rpc_cout.c (print_header): Remove unused vars.
+	* tools/rpcgen/rpc_parse.c (def_union): Likewise.
+
+2003-08-22  Chip Salzenberg  <chip@pobox.com>
+
+	* utils/statd/{log.h,log.c}: Rename log() to note() and L_* to
+	N_*, to avoid conflict with ISO C built-in log() function.
+	* utils/statd/*.c: Use note().
+
+2003-08-20  Chip Salzenberg  <chip@pobox.com>
+
+	* debian/changelog: Version 1.0.5-2.
+
+2003-08-11 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* utils/mountd/cache.c(cache_get_filehandle): close the filehandle
+	before returning.
+	
+2003-08-04 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/include/nfs/export.h, support/nfs/exports.c,
+	utils/exportfs/exports.c, utils/mountd/mountd.c:  change
+	NFSEXP_CROSSMNT to NFSEXP_CROSSMOUNT to avoid confusion with older
+	meaning. Also remove meaningless
+	NFSEXP_{UIDMAP,KERBEROS,SUNSECURE}
+	
+2003-08-04 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/export/xtab.c, support/include/nfslib.h,
+	support/nfs/cacheio.c, support/nfs/nfssvc.c,
+	utils/exportfs/exportfs.c, utils/exportfs/exportfs.man,
+	utils/exportfs/nfsd.man, utils/mountd/cache.c: support
+	/proc/fs/nfsd/* as a perferred alternate to /proc/fs/nfs/*
+	(nfs-utils-1.0.5-post2)
+	
+2003-08-04 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/nfs/nfsexport.c: open channel file O_WRONLY when
+	only writing.
+	* utils/mountd/cache.c: maintain mountlist when new_cache is
+	active. Also use O_WRONLY for channel files.
+	* utils/mountd/mountd.h: mountlist_{del,add} now take a host name
+	rather than an nfs_export.
+	* utils/mountd/rmtab.c: ditto.
+	(nfs-utils-1.5.0-post1)
+	
+2003-07-24  Chip Salzenberg  <chip@pobox.com>
+
+	* support/nfs/xlog.c (xlog): Revise buffer-overflow fix to
+	use Debian security team's cleaner approach.
+	* debian/changelog: Version 1.0.5-1.
+	* debian/nfs-kernel-server.init: Cosmetic changes.
+
 2003-07-18 NeilBrown <neilb@cse.unsw.edu.au>
 
 	Release 1.0.5:

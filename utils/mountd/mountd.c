@@ -117,8 +117,14 @@ mount_umnt_1_svc(struct svc_req *rqstp, dirpath *argp, void *resp)
 	if (!(exp = auth_authenticate("unmount", sin, p))) {
 		return 1;
 	}
-	mountlist_del(exp, p);
-	export_reset (exp);
+	if (new_cache) {
+		if (strcmp(inet_ntoa(exp->m_client->m_addrlist[0]), exp->m_client->m_hostname))
+			mountlist_del(inet_ntoa(exp->m_client->m_addrlist[0]), exp->m_client->m_hostname);
+		mountlist_del(exp->m_client->m_hostname, p);
+	} else {
+		mountlist_del(exp->m_client->m_hostname, p);
+		export_reset (exp);
+	}
 	return 1;
 }
 
@@ -277,7 +283,7 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, int *error, int v3)
 		     p, strerror(errno));
 		*error = NFSERR_NOENT;
 	} else if (estb.st_dev != stb.st_dev
-		   /* && (!new_cache || !(exp->m_export.e_flags & NFSEXP_CROSSMNT)) */
+		   /* && (!new_cache || !(exp->m_export.e_flags & NFSEXP_CROSSMOUNT)) */
 		) {
 		xlog(L_WARNING, "request to export directory %s below nearest filesystem %s",
 		     p, exp->m_export.e_path);
@@ -322,7 +328,7 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, int *error, int v3)
 						stb.st_dev, stb.st_ino);
 		}
 		if (fh != NULL) {
-			mountlist_add(exp, p);
+			mountlist_add(exp->m_client->m_hostname, p);
 			*error = NFS_OK;
 			export_reset (exp);
 			return fh;
@@ -498,18 +504,21 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (descriptors) {
-		if (getrlimit (RLIMIT_NOFILE, &rlim) != 0) {
-			fprintf(stderr, "%s: getrlimit (RLIMIT_NOFILE) failed: %s\n",
+	if (getrlimit (RLIMIT_NOFILE, &rlim) != 0)
+		fprintf(stderr, "%s: getrlimit (RLIMIT_NOFILE) failed: %s\n",
 				argv [0], strerror(errno));
-			exit(1);
-		}
-
-		rlim.rlim_cur = descriptors;
-		if (setrlimit (RLIMIT_NOFILE, &rlim) != 0) {
-			fprintf(stderr, "%s: setrlimit (RLIMIT_NOFILE) failed: %s\n",
-				argv [0], strerror(errno));
-			exit(1);
+	else {
+		/* glibc sunrpc code dies if getdtablesize > FD_SETSIZE */
+		if ((descriptors == 0 && rlim.rlim_cur > FD_SETSIZE) ||
+		    descriptors > FD_SETSIZE)
+			descriptors = FD_SETSIZE;
+		if (descriptors) {
+			rlim.rlim_cur = descriptors;
+			if (setrlimit (RLIMIT_NOFILE, &rlim) != 0) {
+				fprintf(stderr, "%s: setrlimit (RLIMIT_NOFILE) failed: %s\n",
+					argv [0], strerror(errno));
+				exit(1);
+			}
 		}
 	}
 	/* Initialize logging. */

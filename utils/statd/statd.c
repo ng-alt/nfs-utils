@@ -18,6 +18,7 @@
 #include <rpc/rpc.h>
 #include <rpc/pmap_clnt.h>
 #include <rpcmisc.h>
+#include <sys/resource.h>
 #include <grp.h>
 #include "statd.h"
 #include "version.h"
@@ -94,7 +95,7 @@ sm_prog_1_wrapper (struct svc_req *rqstp, register SVCXPRT *transp)
 static void 
 killer (int sig)
 {
-	log (L_FATAL, "Caught signal %d, un-registering and exiting.", sig);
+	note (N_FATAL, "Caught signal %d, un-registering and exiting.", sig);
 	if (!(run_mode & MODE_NOTIFY_ONLY))
 		pmap_unset (SM_PROG, SM_VERS);
 
@@ -122,11 +123,11 @@ static void log_modes(void)
 	{
 		strcat(buf,"Notify-Only ");
 	}
-	log(L_WARNING,buf);
+	note(N_WARNING,buf);
 	/* future: IP aliasing
 	if (run_mode & MODE_NOTIFY_ONLY)
 	{
-		dprintf(L_DEBUG,"Notify IP: %s",svr_addr);
+		dprintf(N_DEBUG,"Notify IP: %s",svr_addr);
 	} */
 }
 
@@ -164,7 +165,7 @@ static void create_pidfile(void)
 	fprintf(fp, "%d\n", getpid());
 	pidfd = dup(fileno(fp));
 	if (fclose(fp) < 0)
-		log(L_WARNING, "Flushing pid file failed.\n");
+		note(N_WARNING, "Flushing pid file failed.\n");
 }
 
 static void truncate_pidfile(void)
@@ -182,7 +183,7 @@ static void drop_privs(void)
 		st.st_uid = 0;
 
 	if (st.st_uid == 0) {
-		log(L_WARNING, "statd running as root. chown %s to choose different user\n",
+		note(N_WARNING, "statd running as root. chown %s to choose different user\n",
 		    SM_DIR);
 		return;
 	}
@@ -195,7 +196,7 @@ static void drop_privs(void)
 	setgroups(0, NULL);
 	if (setgid(st.st_gid) == -1
 	    || setuid(st.st_uid) == -1) {
-		log(L_ERROR, "Fail to drop privileges");
+		note(N_ERROR, "Fail to drop privileges");
 		exit(1);
 	}
 }
@@ -209,6 +210,7 @@ int main (int argc, char **argv)
 	int pid;
 	int arg;
 	int port = 0, out_port = 0;
+	struct rlimit rlim;
 
 	int pipefds[2] = { -1, -1};
 	char status;
@@ -318,6 +320,21 @@ int main (int argc, char **argv)
 	if (!(run_mode & MODE_NODAEMON)) {
 		run_mode &= ~MODE_LOG_STDERR;	/* Never log to console in
 						   daemon mode. */
+	}
+
+	if (getrlimit (RLIMIT_NOFILE, &rlim) != 0)
+		fprintf(stderr, "%s: getrlimit (RLIMIT_NOFILE) failed: %s\n",
+				argv [0], strerror(errno));
+	else {
+		/* glibc sunrpc code dies if getdtablesize > FD_SETSIZE */
+		if (rlim.rlim_cur > FD_SETSIZE) {
+			rlim.rlim_cur = FD_SETSIZE;
+
+			if (setrlimit (RLIMIT_NOFILE, &rlim) != 0) {
+				fprintf(stderr, "%s: setrlimit (RLIMIT_NOFILE) failed: %s\n",
+					argv [0], strerror(errno));
+			}
+		}
 	}
 
 #ifdef SIMULATIONS

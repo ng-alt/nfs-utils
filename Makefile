@@ -5,7 +5,17 @@
 SUBDIRS	= tools support utils
 TOP	= 
 
+all:: config.mk utils/statd/.depend
+install:: all
+
 include $(TOP)rules.mk
+
+
+config.mk:
+	./configure
+
+utils/statd/.depend:
+	$(MAKE) $(MFLAGS) dep
 
 distclean clean::
 	rm -f postscript/*.ps
