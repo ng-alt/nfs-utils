@@ -32,7 +32,7 @@
 #define min(x,y) ((x) < (y)) ? (x) : (y)
 
 #define CORRECT_FSTYPE(type) \
-(!strcmp(type,MNTTYPE_EXT2))
+((!strcmp(type,MNTTYPE_EXT2)) || (!strcmp(type,MNTTYPE_EXT3)))
 
 char *qfextension[] = INITQFNAMES;
 
@@ -51,7 +51,7 @@ hasquota(struct mntent *mnt, int type, char **qfnamep)
    if (((type == USRQUOTA) && (option = hasmntopt(mnt, MNTOPT_USRQUOTA)) != (char *)0) ||
        ((type == GRPQUOTA) && (option = hasmntopt(mnt, MNTOPT_GRPQUOTA)) != (char *)0)) {
       if ((pathname = strchr(option, '=')) == (char *)0) {
-	  *qfnamep=xmalloc(strlen(mnt->mnt_dir)+strlen(qfname)+strlen(qfextension[type])+2);
+	  *qfnamep=xmalloc(strlen(mnt->mnt_dir)+strlen(qfname)+strlen(qfextension[type])+3);
 	  (void) sprintf(*qfnamep, "%s%s%s.%s", mnt->mnt_dir,
 			(mnt->mnt_dir[strlen(mnt->mnt_dir) - 1] == '/') ? "" : "/",
 			qfname, qfextension[type]);

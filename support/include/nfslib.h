@@ -77,6 +77,7 @@ struct exportent {
 struct rmtabent {
 	char		r_client[NFSCLNT_IDMAX+1];
 	char		r_path[NFS_MAXPATHLEN+1];
+	int		r_count;
 };
 
 /*
@@ -92,13 +93,13 @@ void			dupexportent(struct exportent *dst,
 int			updateexportent(struct exportent *eep, char *options);
 
 int			setrmtabent(char *type);
-struct rmtabent *	getrmtabent(int log);
-void			putrmtabent(struct rmtabent *xep);
+struct rmtabent *	getrmtabent(int log, long *pos);
+void			putrmtabent(struct rmtabent *xep, long *pos);
 void			endrmtabent(void);
 void			rewindrmtabent(void);
 FILE *			fsetrmtabent(char *fname, char *type);
-struct rmtabent *	fgetrmtabent(FILE *fp, int log);
-void			fputrmtabent(FILE *fp, struct rmtabent *xep);
+struct rmtabent *	fgetrmtabent(FILE *fp, int log, long *pos);
+void			fputrmtabent(FILE *fp, struct rmtabent *xep, long *pos);
 void			fendrmtabent(FILE *fp);
 void			frewindrmtabent(FILE *fp);
 
@@ -116,8 +117,9 @@ int			nfsaddclient(struct nfsctl_client *clp);
 int			nfsdelclient(struct nfsctl_client *clp);
 int			nfsexport(struct nfsctl_export *exp);
 int			nfsunexport(struct nfsctl_export *exp);
-struct knfs_fh *	getfh_old(struct sockaddr *addr, dev_t dev, ino_t ino);
-struct knfs_fh *	getfh(struct sockaddr *addr, const char *);
+struct nfs_fh_len *	getfh_old(struct sockaddr *addr, dev_t dev, ino_t ino);
+struct nfs_fh_len *	getfh(struct sockaddr *addr, const char *);
+struct nfs_fh_len *	getfh_size(struct sockaddr *addr, const char *, int size);
 
 /* lockd. */
 int			lockdsvc();

@@ -1,3 +1,270 @@
+2000-06-27  H.J. Lu <hjl@lucon.org>
+
+	* utils/statd/statd.c (main): Use sysconf (_SC_OPEN_MAX)
+	instead of OPEN_MAX.
+
+2000-06-27  H.J. Lu <hjl@lucon.org>
+
+	* README: Updated.
+
+2000-06-27  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Run /usr/sbin/exportfs last during
+	startup to ensure all exiting clients are exported.
+
+	* configure.in (VERSION): Set to "0.1.8.2".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-06-06  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.8.1".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-06-06  H.J. Lu <hjl@lucon.org>
+
+	* utils/mountd/mountd.c (mount_dump_1_svc): Cast svc_getcaller
+	to "struct sockaddr_in *" for glibc 2.2.
+	(mount_umnt_1_svc): Likewise.
+	(mount_umntall_1_svc): Likewise.
+	(mount_export_1_svc): Likewise.
+	(mount_exportall_1_svc): Likewise.
+	(mount_pathconf_2_svc): Likewise.
+	(get_rootfh): Likewise.
+
+2000-06-04  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init: Fix a typo in comment.
+
+2000-05-31  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.8".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+2000-05-31  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.7.5".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* support/include/nfslib.h (exportent): Add a new field,
+	r_count, to count the number of mounts from a client.
+	(getrmtabent): Take a new argument for position in file.
+	(putrmtabent): Likewise.
+	(fgetrmtabent): Likewise.
+	(fputrmtabent): Likewise.
+	* support/nfs/rmtab.c (getrmtabent): Handle the new argument
+	for position in file.
+	(fgetrmtabent): Likewise.
+	(putrmtabent): Likewise.
+	(fputrmtabent): Likewise.
+
+	* support/nfs/rmtab.c (fgetrmtabent): Get value for the new
+	field, r_count.
+
+	* support/export/rmtab.c (rmtab_read): Pass NULL as the new
+	argument to getrmtabent (), fgetrmtabent (), putrmtabent ()
+	and fputrmtabent ().
+	* utils/mountd/rmtab.c (mountlist_add): Likewise.
+	(mountlist_del): Likewise.
+	(mountlist_del_all): Likewise.
+	(mountlist_list): Likewise.
+
+	* utils/mountd/rmtab.c (mountlist_add): Increment "r_count"
+	for the existing entry and initialize "r_count" to 1.
+	(mountlist_del): Decrement "r_count".
+
+2000-05-18  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.7.4".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-05-18  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfs.init (restart): Just do stop and start.
+
+2000-05-09  Jay Weber <jweber@valinux.com>
+
+	* utils/rquotad/hasquota.c: added support for ext3 recognition
+	in rquotad.
+	* utils/rquotad/mntent.h: Likewise.
+
+2000-05-01  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.7.3".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-05-01  H.J. Lu <hjl@lucon.org>
+
+	* utils/rquotad/rquota_server.c (getquotainfo): Skip bad
+	mounting poins in /etc/fstab.
+
+2000-05-01  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.7.2".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-05-01  H.J. Lu <hjl@lucon.org>
+
+	* utils/rquotad/rquota_server.c (getquotainfo): Call stat ()
+	to check for the mounting point.
+
+2000-04-29  Chip Salzenberg  <chip@valinux.com>
+	    Neil Brown  <neilb@cse.unsw.edu.au>
+
+	* Really re-use RPC ports.
+	  (Fixes earlier patch.  Sorry, Neil.)
+
+2000-04-26  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.7.1".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+2000-04-26  H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfslock.init: Check if lockd exits before killing
+	it.
+
+2000-04-25  H.J. Lu <hjl@lucon.org>
+
+	* README: Require util-linux-2.10f-mount-rpc.patch for mount.
+
+2000-03-21 Michael Weiser <michael@weiser.saale-net.de>
+
+	* support/nfs/exports.c (parsesquash): Correctly set the
+	return pointer.
+
+Tue Mar 21 11:38:48 EST 2000 NeilBrown <neilb@cse.unsw.edu.au>
+
+	* support/include/nfs/nfs.h: Removed knowledge of internals of
+	     kernel filehandles (which can change) and defined nfs_fh_size
+	     which has variable size
+	
+	* support/nfs/getfh.c: defined getfh_size to use new syscall to
+	     get variable sized file handles, and change getfh{,old} to
+	     use nfs_fh_size	    
+	
+	* utils/mountd/mountd.c: use nfd_fh_size and call getfh_size for
+	     NFSv3 file handles
+
+	* tools/Makefile, tools/nlmtest/nlmtest.c
+	     nlmtest.c depended on internel format of file handles, so now
+	     doesn't work.
+
+	
+2000-03-12  Chip Salzenberg  <chip@valinux.com>
+	    Neil Brown  <neilb@cse.unsw.edu.au>
+
+	* support/nfs/rpcmisc.c (rpc_init): Share transports.
+
+2000-03-13 H.J. Lu <hjl@lucon.org>
+
+	* etc/redhat/nfsd.init: Updated.
+
+	* etc/redhat/nfslock.init: Updated.
+
+	* nfs-utils.spec.in: Updated.
+
+	* configure.in (VERSION): Set to "0.1.7".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+Wed Mar  8 09:42:43 2000 Neil Brown <neilb@cse.unsw.edu.au>
+
+	* utils/exportfs/exportfs.c (dump): Included printing of
+	   nohide, no_subtree_check, and insecure_locks
+
+2000-02-26  Chip Salzenberg  <chip@valinux.com>
+
+	* config.mk.in (INSTALLSUID): Strip ("-s").
+	(INSTALLSCRIPT): Define.
+	* utils/nhfsstone/Makefile: Use it.
+
+2000-02-26  Chip Salzenberg  <chip@valinux.com>
+
+	* utils/lockd/lockd.man: Create.
+	* utils/lockd/Makefile: Install it.
+	* utils/nhfsstone/nhfs{run,nums,graph}.man: Create.
+	* utils/nhfsstone/nhfsstone.man: Change suffix from ".1".
+	* utils/nhfsstone/Makefile: Install the helper scripts and
+	  all four man pages.
+	* utils/exportfs/exports.man: Fix typo.
+
+2000-02-26  Chip Salzenberg  <chip@valinux.com>
+
+	* support/nfs/xio.c (xungetc): Decrement line number when
+	character to unget is newline.  Make first parameter int, so
+	it can distinguish EOF from \377.
+	* support/include/xio.h (xungetc): Adjust prototype.
+
+Fri Feb  4 23:42:23 2000 Neil Brown <neilb@cse.unsw.edu.au>
+
+	* support/include/nfs/export.h: added NFSEXP_NOAUTHNLM
+	* support/nfs/exports.c: added handling for NFSEXP_NOAUTHNLM
+	* utils/exportfs/exports.man: added documentation for no_auth_nlm.
+
+	This is for supporting a new option introduced in 2.3.42
+
+Thu Feb  3 14:55:48 2000 H.J. Lu <hjl@lucon.org>
+
+	* COPYING: Added. GPL.
+
+Thu Feb 03 14:40:40 2000 Cristian Gafton <gafton@redhat.com>
+
+	* utils/rquotad/rquota_server.c (getquotainfo): Call statfs ()
+	to get the block size.
+
+Tue Jan 25 11:04:17 2000 H.J. Lu <hjl@lucon.org>
+
+	* nfs-utils.spec.in: Update ftp site.
+
+Mon Jan 17 11:48:18 2000 H.J. Lu <hjl@lucon.org>
+
+	* README: Update hostnames.
+
+Tue Jan 11 10:06:22 2000 H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.6".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+Mon Jan 10 14:26:33 2000 H.J. Lu <hjl@lucon.org>
+
+	* utils/mountd/auth.c (auth_authenticate_internal): Call
+	xstrdup for hostname before passing it to gethostbyname.
+
+	* utils/mountd/mountd.c (get_exportlist): Use xstrdup instead
+	of strdup.
+
+Sun Dec 19 09:35:01 1999  H.J. Lu <hjl@lucon.org>
+
+	* README: Update the mailing list address.
+
+Sun Dec 19 09:22:28 1999  H.J. Lu <hjl@lucon.org>
+
+	* configure.in (VERSION): Set to "0.1.5".
+	* configure: Regenerated.
+	* nfs-utils.spec: Updated.
+
+	* README: Updated.
+
+Mon Dec 13 13:40:20 1999  H.J. Lu <hjl@lucon.org>
+
+	* utils/rquotad/hasquota.c (hasquota): Malloc one more char
+	for '/'.
+
 Mon Dec  6 09:42:45 1999  H.J. Lu <hjl@lucon.org>
 
 	* configure.in (VERSION): Set to "0.1.4".
@@ -48,16 +315,16 @@ Mon Nov 29 11:15:47 1999  H.J. Lu <hjl@lucon.org>
 	* utils/statd/monitor.c (sm_mon_1_svc): Accept lockd callbacks
 	to the new port 24 as well as the historical port 100021.
 
-Tue Nov 23 10:21:34 EST 1999 Neil Brown <neilb@cse.unsw.edu.au>
+Tue Nov 23 10:21:34 1999 Neil Brown <neilb@cse.unsw.edu.au>
 
-	* etc/redhat/nfsd.init (stop) : moved exportfs -ua after
+	* etc/redhat/nfsd.init (stop): moved exportfs -ua after
 	stopping nfsd to stop spurious ESTALE on server shutdown.
 	
 Tue Nov 23 10:13:39 1999  Neil Brown <neilb@cse.unsw.edu.au>
 
 	* support/nfs/exports.c (parseopts): make copy of opt string
 	before 'nul'ing out commas so that
-	
+
 	# exportfs -o option1,option2 hosta:/fs hostb:/fs
 
         applies both options to both exports.
@@ -83,7 +350,7 @@ Thu Oct 28 12:55:42 1999  H.J. Lu <hjl@lucon.org>
 	* tools/rpcgen/rpc_scan.h (tok_kind): Likewise.
 	* tools/rpcgen/rpc_util.c (tokstrings): Likewise.
 
-Thu Oct 28 11:27:51 EST 1999 Neil Brown <neilb@cse.unsw.edu.au>
+Thu Oct 28 11:27:51 1999 Neil Brown <neilb@cse.unsw.edu.au>
 
         * support/include/nfs/export.h addedd NFSEXP_NOSUBTREECHECK
         * support/nfs/exports.c: added {no_,}subtree_check and changed

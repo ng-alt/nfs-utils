@@ -27,7 +27,7 @@ fi
 [ -x /usr/sbin/exportfs ] || exit 0
 [ -s /etc/exports ] || exit 0
 
-# Number of servers to be started uo by default
+# Number of servers to be started up by default
 RPCNFSDCOUNT=8
 # No NFS V3.
 RPCMOUNTDOPTS="--no-nfs-version 3"
@@ -36,7 +36,6 @@ RPCMOUNTDOPTS="--no-nfs-version 3"
 case "$1" in
   start)
 	# Start daemons.
-	action "Starting NFS services: " /usr/sbin/exportfs -r
 	echo -n "Starting NFS quotas: "
 	daemon rpc.rquotad
 	echo
@@ -46,10 +45,12 @@ case "$1" in
 	echo -n "Starting NFS daemon: "
 	daemon rpc.nfsd $RPCNFSDCOUNT
 	echo
+	action "Starting NFS services: " /usr/sbin/exportfs -r
 	touch /var/lock/subsys/nfs
 	;;
   stop)
 	# Stop daemons.
+	action "Shutting down NFS services: " /usr/sbin/exportfs -au
 	echo -n "Shutting down NFS mountd: "
 	killproc rpc.mountd
 	echo
@@ -59,7 +60,6 @@ case "$1" in
 	echo -n "Shutting down NFS quotas: "
 	killproc rpc.rquotad
 	echo
-	action "Shutting down NFS services: " /usr/sbin/exportfs -au
 	rm -f /var/lock/subsys/nfs
 	;;
   status)
@@ -68,13 +68,8 @@ case "$1" in
 	status rpc.rquotad
 	;;
   restart)
-	echo -n "Restarting NFS services: "
-	echo -n "rpc.mountd "
-	killproc rpc.mountd
-	daemon rpc.mountd $RPCMOUNTDOPTS
-	/usr/sbin/exportfs -r
-	touch /var/lock/subsys/nfs
-	echo "done."
+	$0 stop
+	$0 start
 	;;
   reload)
 	/usr/sbin/exportfs -r
@@ -99,4 +94,3 @@ case "$1" in
 esac
 
 exit 0
-

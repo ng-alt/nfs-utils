@@ -22,8 +22,8 @@ fi
 # Check that networking is up.
 [ ${NETWORKING} = "no" ] && exit 0
 
-[ -x /usr/sbin/rpc.lockd ] || exit 0
-[ -x /usr/sbin/rpc.statd ] || exit 0
+[ -x /sbin/rpc.lockd ] || exit 0
+[ -x /sbin/rpc.statd ] || exit 0
 
 # See how we were called.
 case "$1" in
@@ -41,9 +41,18 @@ case "$1" in
   stop)
 	# Stop daemons.
 	echo "Shutting down NFS file locking services: "
-	echo -n "Shutting down NFS lockd: "
-	killproc lockd
-	echo
+	pidlist=`pidofproc lockd`
+	if [ -n "$pidlist" ]; then
+		pid=
+		for apid in $pidlist ; do
+			[ -d /proc/$apid ] && pid="$pid $apid"
+		done
+		if [ -n "$pid" ]; then
+			echo -n "Shutting down NFS lockd: "
+			killproc lockd
+			echo
+		fi
+	fi
 	echo -n "Shutting down NFS statd: "
 	killproc rpc.statd
 	echo
