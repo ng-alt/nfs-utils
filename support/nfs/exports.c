@@ -185,6 +185,8 @@ putexportent(struct exportent *ep)
 		"no_" : "");
 	fprintf(fp, "%ssecure_locks,", (ep->e_flags & NFSEXP_NOAUTHNLM)?
 		"in" : "");
+	fprintf(fp, "%sacl,", (ep->e_flags & NFSEXP_NOACL)?
+		"no_" : "");
 	if (ep->e_flags & NFSEXP_FSID) {
 		fprintf(fp, "fsid=%d,", ep->e_fsid);
 	}
@@ -374,6 +376,10 @@ parseopts(char *cp, struct exportent *ep, int warn)
 			ep->e_flags &= ~NFSEXP_NOAUTHNLM;
 		else if (strcmp(opt, "insecure_locks") == 0)
 			ep->e_flags |= NFSEXP_NOAUTHNLM;
+		else if (strcmp(opt, "acl") == 0)
+			ep->e_flags &= ~NFSEXP_NOACL;
+		else if (strcmp(opt, "no_acl") == 0)
+			ep->e_flags |= NFSEXP_NOACL;
 		else if (strncmp(opt, "mapping=", 8) == 0)
 			ep->e_maptype = parsemaptype(opt+8);
 		else if (strcmp(opt, "map_identity") == 0)	/* old style */
@@ -442,7 +448,7 @@ bad_option:
 	ep->e_nsqgids = nsqgids;
 
 out:
-	if (warn && !had_sync_opt)
+	if (warn && !had_sync_opt && !(ep->e_flags & NFSEXP_READONLY))
 		xlog(L_WARNING, "%s [%d]: No 'sync' or 'async' option specified for export \"%s:%s\".\n"
 				"  Assuming default behaviour ('sync').\n"
 		     		"  NOTE: this default has changed from previous versions\n",

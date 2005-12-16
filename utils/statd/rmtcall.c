@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <arpa/inet.h>
 #include <rpc/rpc.h>
 #include <rpc/pmap_prot.h>
@@ -34,6 +35,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <ifaddrs.h>
 #include "sm_inter.h"
 #include "statd.h"
 #include "notlist.h"
@@ -65,7 +67,7 @@ statd_get_socket(int port)
 
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
-	sin.sin_port = port;
+	sin.sin_addr.s_addr = INADDR_ANY;
 	/*
 	 * If a local hostname is given (-n option to statd), bind to the address
 	 * specified. This is required to support clients that ignore the mon_name in
@@ -76,14 +78,64 @@ statd_get_socket(int port)
 		if (hp)
 			sin.sin_addr = *(struct in_addr *) hp->h_addr;
 	}
+	if (port != 0) {
+		sin.sin_port = htons(port);
+		if (bind(sockfd, &sin, sizeof(sin)) == 0)
+			goto out_success;
+		note(N_CRIT, "statd: failed to bind to outgoing port, %d\n"
+				"       falling back on randomly chosen port\n", port);
+	}
 	if (bindresvport(sockfd, &sin) < 0) {
 		dprintf(N_WARNING,
 			"process_hosts: can't bind to reserved port\n");
 	}
-
+out_success:
 	return sockfd;
 }
+/*
+ * Using the NL_ADDR(lp), reset (if needed) the hostname
+ * that will be put in the SM_NOTIFY to the hostname
+ * that is associated with the network interface 
+ * that was monitored
+ */
+static void
+reset_my_name(notify_list *lp)
+{
+	struct ifaddrs *ifa = NULL, *ifap;
+	struct in_addr netaddr, tmp;
+	struct sockaddr_in *sin, *nsin;
+	struct hostent *hp;
 
+	netaddr.s_addr = inet_netof(NL_ADDR(lp));
+	if (getifaddrs(&ifa) >= 0) {
+		for (ifap = ifa; ifap != NULL; ifap = ifap->ifa_next) {
+			if (!(ifap->ifa_flags & IFF_UP))
+				continue;
+
+			note(N_DEBUG, "ifa_name %s\n", ifap->ifa_name);
+			if (ifap->ifa_addr == NULL)
+				continue;
+			if (ifap->ifa_addr->sa_family != AF_INET)
+				continue;
+
+			sin = (struct sockaddr_in *)ifap->ifa_addr;
+			nsin = (struct sockaddr_in *)ifap->ifa_netmask;
+			tmp.s_addr = sin->sin_addr.s_addr & nsin->sin_addr.s_addr;
+			if (memcmp(&tmp.s_addr, &netaddr.s_addr, sizeof(netaddr.s_addr)))
+				continue;
+			hp = gethostbyaddr((char *)&sin->sin_addr, 
+				sizeof(sin->sin_addr), AF_INET);
+			if (hp == NULL)
+				continue;
+			if (strcmp(NL_MY_NAME(lp), hp->h_name)) {
+				free(NL_MY_NAME(lp));
+				NL_MY_NAME(lp)= strdup(hp->h_name);
+				note(N_DEBUG, "NL_MY_NAME %s\n", NL_MY_NAME(lp));
+			}
+		}
+	}
+	return;
+}
 /*
  * Try to resolve host name for notify/callback request
  *
@@ -293,6 +345,7 @@ process_entry(int sockfd, notify_list *lp)
 {
 	struct sockaddr_in	sin;
 	struct status		new_status;
+	stat_chge		new_stat;
 	xdrproc_t		func;
 	void			*objp;
 	u_int32_t		proc, vers, prog;
@@ -319,9 +372,19 @@ process_entry(int sockfd, notify_list *lp)
 
 		/* Use source address for notify replies */
 		sin.sin_addr   = lp->addr;
+		/* 
+		 * Unless a static hostname has been defined
+		 * set the NL_MY_NAME(lp) hostname to the 
+		 * one associated with the network interface
+		 */
+		if (!(run_mode & STATIC_HOSTNAME))
+			reset_my_name(lp);
 
 		func = (xdrproc_t) xdr_stat_chge;
-		objp = &SM_stat_chge;
+		new_stat.state = MY_STATE;
+		new_stat.mon_name = NL_MY_NAME(lp);
+
+		objp = &new_stat;
 		break;
 	case NOTIFY_CALLBACK:
 		prog = NL_MY_PROG(lp);

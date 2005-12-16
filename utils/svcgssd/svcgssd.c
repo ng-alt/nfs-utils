@@ -37,6 +37,8 @@
 
 */
 
+#include "config.h"
+
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -52,6 +54,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include "nfslib.h"
 #include "svcgssd.h"
 #include "gss_util.h"
 #include "err_util.h"
@@ -67,7 +70,7 @@ int pipefds[2] = { -1, -1};
 static void
 mydaemon(int nochdir, int noclose)
 {
-	int pid, status, tempfd, fdmax, filedes;
+	int pid, status, tempfd;
 
 	if (pipe(pipefds) < 0) {
 		printerr(1, "mydaemon: pipe() failed: errno %d (%s)\n",
@@ -111,13 +114,10 @@ mydaemon(int nochdir, int noclose)
 
 	if (noclose == 0) {
 		tempfd = open("/dev/null", O_RDWR);
-		close(0); dup2(tempfd, 0);
-		close(1); dup2(tempfd, 1);
-		close(2); dup2(tempfd, 2);
-		fdmax = sysconf (_SC_OPEN_MAX);
-		for (filedes = 3; filedes < fdmax; filedes++)
-			if (filedes != pipefds[1])
-				close (filedes);
+		dup2(tempfd, 0);
+		dup2(tempfd, 1);
+		dup2(tempfd, 2);
+		closeall(3);
 	}
 
 	return;
@@ -143,10 +143,18 @@ sig_die(int signal)
 	exit(1);
 }
 
+void
+sig_hup(int signal)
+{
+	/* don't exit on SIGHUP */
+	printerr(1, "Received SIGHUP... Ignoring.\n");
+	return;
+}
+
 static void
 usage(char *progname)
 {
-	fprintf(stderr, "usage: %s [-n] [-f] [-v]\n",
+	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r]\n",
 		progname);
 	exit(1);
 }
@@ -157,11 +165,12 @@ main(int argc, char *argv[])
 	int get_creds = 1;
 	int fg = 0;
 	int verbosity = 0;
+	int rpc_verbosity = 0;
 	int opt;
 	extern char *optarg;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fvnp:")) != -1) {
+	while ((opt = getopt(argc, argv, "fvrnp:")) != -1) {
 		switch (opt) {
 			case 'f':
 				fg = 1;
@@ -171,6 +180,9 @@ main(int argc, char *argv[])
 				break;
 			case 'v':
 				verbosity++;
+				break;
+			case 'r':
+				rpc_verbosity++;
 				break;
 			default:
 				usage(argv[0]);
@@ -184,13 +196,20 @@ main(int argc, char *argv[])
 		progname = argv[0];
 
 	initerr(progname, verbosity, fg);
+#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
+	authgss_set_debug_level(rpc_verbosity);
+#else
+	if (rpc_verbosity > 0)
+		printerr(0, "Warning: rpcsec_gss library does not "
+			    "support setting debug level\n");
+#endif
 
 	if (!fg)
 		mydaemon(0, 0);
 
 	signal(SIGINT, sig_die);
 	signal(SIGTERM, sig_die);
-	signal(SIGHUP, sig_die);
+	signal(SIGHUP, sig_hup);
 
 	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
                 printerr(0, "unable to obtain root (machine) credentials\n");
