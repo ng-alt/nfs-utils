@@ -1,3 +1,50 @@
+2006-04-12 NeilBrown <neilb@suse.de>
+	Set version to 1.0.8, 
+	aclocal -I aclocal ; autoheader ; automake ; autoconf
+
+2006-04-10 NeilBrown <neilb@suse.de>
+	Various paranoia checks:
+	gssd_proc.c: pass max_field sizes to sscanf to avoid buffer
+	  overflow
+	svcgssd_proc.c: range_check name.length, to ensure name.length+1
+	  doesn't wrap
+	idmapd.c(nfsdcb): make sure at least one byte is read before
+	 zeroing the last byte that was read, otherwise memory corruption
+	 is possible.
+
+	Found by SuSE security audit.
+	
+2006-04-10 "Kevin Coffman" <kwc@citi.umich.edu>
+	Check for sufficient version of librpcsecgss and libgssapi
+	in configure.in
+
+2006-04-10 "Kevin Coffman" <kwc@citi.umich.edu>
+	Update aclocal/tcp-wrappers.m4 to define HAVE_LIBWRAP and
+	HAVE_TCP_WRAPPERS as appropriate.	
+
+2006-04-10 NeilBrown <neilb@suse.de>
+	Add checking for innetgr back to configure.in
+	
+2006-04-10 kwc@citi.umich.edu
+	Update calls to gss_export_lucid_sec_context()
+	
+	Change the calls to gss_export_lucid_sec_context() to match the corrected
+	interface definition in libgssapi-0.9.
+	
+2006-04-10 kwc@citi.umich.edu
+	Plug memory leaks in svcgssd
+	
+	Various memory leaks in the svcgssd context processing are eliminated.
+	
+2006-04-10 kwc@citi.umich.edu
+	Fix memory leak of the AUTH structure on context negotiations
+	
+	Free AUTH structure after completing context negotiation and sending
+	context information to the kernel.
+	
+2006-04-10 kwc@citi.umich.edu
+	Fix support/include/config.h.in such as would be done be running autoheader.
+	
 2006-03-28 NeilBrown <neilb@suse.de>
 	1.0.8-pre3, aclocal/autoconf/automake
 	
