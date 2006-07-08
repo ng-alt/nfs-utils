@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/resource.h>
+#include <sys/wait.h>
 #include "xmalloc.h"
 #include "misc.h"
 #include "mountd.h"
@@ -34,7 +35,7 @@ extern void my_svc_run(void);
 
 static void		usage(const char *, int exitcode);
 static exports		get_exportlist(void);
-static struct nfs_fh_len *get_rootfh(struct svc_req *, dirpath *, int *, int v3);
+static struct nfs_fh_len *get_rootfh(struct svc_req *, dirpath *, mountstat3 *, int v3);
 
 int new_cache = 0;
 
@@ -42,6 +43,13 @@ int new_cache = 0;
  * When this is done, the program will receive callouts whenever clients
  * send mount or unmount requests -- the callout is not needed for 2.6 kernel */
 char *ha_callout_prog = NULL;
+
+/* Number of mountd threads to start.   Default is 1 and
+ * that's probably enough unless you need hundreds of
+ * clients to be able to mount at once.  */
+static int num_threads = 1;
+/* Arbitrary limit on number of threads */
+#define MAX_THREADS 64
 
 static struct option longopts[] =
 {
@@ -56,10 +64,93 @@ static struct option longopts[] =
 	{ "port", 1, 0, 'p' },
 	{ "no-tcp", 0, 0, 'n' },
 	{ "ha-callout", 1, 0, 'H' },
+	{ "state-directory-path", 1, 0, 's' },
+	{ "num-threads", 1, 0, 't' },
 	{ NULL, 0, 0, 0 }
 };
 
 static int nfs_version = -1;
+
+static void
+unregister_services (void)
+{
+	if (nfs_version & 0x1)
+		pmap_unset (MOUNTPROG, MOUNTVERS);
+	if (nfs_version & (0x1 << 1))
+		pmap_unset (MOUNTPROG, MOUNTVERS_POSIX);
+	if (nfs_version & (0x1 << 2))
+		pmap_unset (MOUNTPROG, MOUNTVERS_NFSV3);
+}
+
+/* Wait for all worker child processes to exit and reap them */
+static void
+wait_for_workers (void)
+{
+	int status;
+	pid_t pid;
+
+	for (;;) {
+
+		pid = waitpid(0, &status, 0);
+
+		if (pid < 0) {
+			if (errno == ECHILD)
+				return; /* no more children */
+			xlog(L_FATAL, "mountd: can't wait: %s\n",
+					strerror(errno));
+		}
+
+		/* Note: because we SIG_IGN'd SIGCHLD earlier, this
+		 * does not happen on 2.6 kernels, and waitpid() blocks
+		 * until all the children are dead then returns with
+		 * -ECHILD.  But, we don't need to do anything on the
+		 * death of individual workers, so we don't care. */
+		xlog(L_NOTICE, "mountd: reaped child %d, status %d\n",
+				(int)pid, status);
+	}
+}
+
+/* Fork num_threads worker children and wait for them */
+static void
+fork_workers(void)
+{
+	int i;
+	pid_t pid;
+
+	xlog(L_NOTICE, "mountd: starting %d threads\n", num_threads);
+
+	for (i = 0 ; i < num_threads ; i++) {
+		pid = fork();
+		if (pid < 0) {
+			xlog(L_FATAL, "mountd: cannot fork: %s\n",
+					strerror(errno));
+		}
+		if (pid == 0) {
+			/* worker child */
+
+			/* Re-enable the default action on SIGTERM et al
+			 * so that workers die naturally when sent them.
+			 * Only the parent unregisters with pmap and
+			 * hence needs to do special SIGTERM handling. */
+			struct sigaction sa;
+			sa.sa_handler = SIG_DFL;
+			sa.sa_flags = 0;
+			sigemptyset(&sa.sa_mask);
+			sigaction(SIGHUP, &sa, NULL);
+			sigaction(SIGINT, &sa, NULL);
+			sigaction(SIGTERM, &sa, NULL);
+
+			/* fall into my_svc_run in caller */
+			return;
+		}
+	}
+
+	/* in parent */
+	wait_for_workers();
+	unregister_services();
+	xlog(L_NOTICE, "mountd: no more workers, exiting\n");
+	exit(0);
+}
 
 /*
  * Signal handler.
@@ -67,13 +158,13 @@ static int nfs_version = -1;
 static void 
 killer (int sig)
 {
-  if (nfs_version & 0x1)
-    pmap_unset (MOUNTPROG, MOUNTVERS);
-  if (nfs_version & (0x1 << 1))
-    pmap_unset (MOUNTPROG, MOUNTVERS_POSIX);
-  if (nfs_version & (0x1 << 2))
-    pmap_unset (MOUNTPROG, MOUNTVERS_NFSV3);
-  xlog (L_FATAL, "Caught signal %d, un-registering and exiting.", sig);
+	unregister_services();
+	if (num_threads > 1) {
+		/* play Kronos and eat our children */
+		kill(0, SIGTERM);
+		wait_for_workers();
+	}
+	xlog (L_FATAL, "Caught signal %d, un-registering and exiting.", sig);
 }
 
 static void
@@ -255,11 +346,11 @@ mount_mnt_3_svc(struct svc_req *rqstp, dirpath *path, mountres3 *res)
 	struct nfs_fh_len *fh;
 
 	xlog(D_CALL, "MNT3(%s) called", *path);
-	if ((fh = get_rootfh(rqstp, path, (int *) &res->fhs_status, 1)) != NULL) {
+	if ((fh = get_rootfh(rqstp, path, &res->fhs_status, 1)) != NULL) {
 		struct mountres3_ok	*ok = &res->mountres3_u.mountinfo;
 
 		ok->fhandle.fhandle3_len = fh->fh_size;
-		ok->fhandle.fhandle3_val = fh->fh_handle;
+		ok->fhandle.fhandle3_val = (char *)fh->fh_handle;
 		ok->auth_flavors.auth_flavors_len
 			= sizeof(flavors)/sizeof(flavors[0]);
 		ok->auth_flavors.auth_flavors_val = flavors;
@@ -268,7 +359,7 @@ mount_mnt_3_svc(struct svc_req *rqstp, dirpath *path, mountres3 *res)
 }
 
 static struct nfs_fh_len *
-get_rootfh(struct svc_req *rqstp, dirpath *path, int *error, int v3)
+get_rootfh(struct svc_req *rqstp, dirpath *path, mountstat3 *error, int v3)
 {
 	struct sockaddr_in *sin =
 		(struct sockaddr_in *) svc_getcaller(rqstp->rq_xprt);
@@ -457,6 +548,7 @@ int
 main(int argc, char **argv)
 {
 	char	*export_file = _PATH_EXPORTS;
+	char    *state_dir = NFS_STATEDIR;
 	int	foreground = 0;
 	int	port = 0;
 	int	descriptors = 0;
@@ -466,7 +558,7 @@ main(int argc, char **argv)
 
 	/* Parse the command line options and arguments. */
 	opterr = 0;
-	while ((c = getopt_long(argc, argv, "o:n:Fd:f:p:P:hH:N:V:v", longopts, NULL)) != EOF)
+	while ((c = getopt_long(argc, argv, "o:n:Fd:f:p:P:hH:N:V:vs:t:", longopts, NULL)) != EOF)
 		switch (c) {
 		case 'o':
 			descriptors = atoi(optarg);
@@ -506,6 +598,16 @@ main(int argc, char **argv)
 		case 'n':
 			_rpcfdtype = SOCK_DGRAM;
 			break;
+		case 's':
+			if ((state_dir = xstrdup(optarg)) == NULL) {
+				fprintf(stderr, "%s: xstrdup(%s) failed!\n",
+					argv[0], optarg);
+				exit(1);
+			}
+			break;
+		case 't':
+			num_threads = atoi (optarg);
+			break;
 		case 'V':
 			nfs_version |= 1 << (atoi (optarg) - 1);
 			break;
@@ -523,9 +625,9 @@ main(int argc, char **argv)
 	if (optind != argc || !(nfs_version & 0x7))
 		usage(argv [0], 1);
 
-	if (chdir(NFS_STATEDIR)) {
+	if (chdir(state_dir)) {
 		fprintf(stderr, "%s: chdir(%s) failed: %s\n",
-			argv [0], NFS_STATEDIR, strerror(errno));
+			argv [0], state_dir, strerror(errno));
 		exit(1);
 	}
 
@@ -606,6 +708,17 @@ main(int argc, char **argv)
 		setsid();
 	}
 
+	/* silently bounds check num_threads */
+	if (foreground)
+		num_threads = 1;
+	else if (num_threads < 1)
+		num_threads = 1;
+	else if (num_threads > MAX_THREADS)
+		num_threads = MAX_THREADS;
+
+	if (num_threads > 1)
+		fork_workers();
+
 	my_svc_run();
 
 	xlog(L_ERROR, "Ack! Gack! svc_run returned!\n");
@@ -620,6 +733,7 @@ usage(const char *prog, int n)
 "	[-o num|--descriptors num] [-f exports-file|--exports-file=file]\n"
 "	[-p|--port port] [-V version|--nfs-version version]\n"
 "	[-N version|--no-nfs-version version] [-n|--no-tcp]\n"
-"	[-H ha-callout-prog]\n", prog);
+"	[-H ha-callout-prog] [-s|--state-directory-path path]\n"
+"	[-t num|--num-threads=num]\n", prog);
 	exit(n);
 }

@@ -55,10 +55,11 @@ libnfs_a_AR = $(AR) $(ARFLAGS)
 libnfs_a_LIBADD =
 am_libnfs_a_OBJECTS = exports.$(OBJEXT) rmtab.$(OBJEXT) xio.$(OBJEXT) \
 	rpcmisc.$(OBJEXT) rpcdispatch.$(OBJEXT) xlog.$(OBJEXT) \
-	xmalloc.$(OBJEXT) wildmat.$(OBJEXT) nfssvc.$(OBJEXT) \
+	xcommon.$(OBJEXT) wildmat.$(OBJEXT) nfssvc.$(OBJEXT) \
 	nfsclient.$(OBJEXT) nfsexport.$(OBJEXT) getfh.$(OBJEXT) \
 	nfsctl.$(OBJEXT) lockdsvc.$(OBJEXT) svc_socket.$(OBJEXT) \
-	cacheio.$(OBJEXT) closeall.$(OBJEXT)
+	cacheio.$(OBJEXT) closeall.$(OBJEXT) conn.$(OBJEXT) \
+	fstab.$(OBJEXT) nfs_mntent.$(OBJEXT)
 libnfs_a_OBJECTS = $(am_libnfs_a_OBJECTS)
 DEFAULT_INCLUDES = -I. -I$(srcdir) -I$(top_builddir)/support/include
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -96,6 +97,8 @@ CFLAGS = @CFLAGS@
 CFLAGS_FOR_BUILD = @CFLAGS_FOR_BUILD@
 CONFIG_GSS_FALSE = @CONFIG_GSS_FALSE@
 CONFIG_GSS_TRUE = @CONFIG_GSS_TRUE@
+CONFIG_MOUNT_FALSE = @CONFIG_MOUNT_FALSE@
+CONFIG_MOUNT_TRUE = @CONFIG_MOUNT_TRUE@
 CONFIG_NFSV4_FALSE = @CONFIG_NFSV4_FALSE@
 CONFIG_NFSV4_TRUE = @CONFIG_NFSV4_TRUE@
 CONFIG_RQUOTAD_FALSE = @CONFIG_RQUOTAD_FALSE@
@@ -119,6 +122,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 F77 = @F77@
 FFLAGS = @FFLAGS@
+GREP = @GREP@
 GSSAPI_CFLAGS = @GSSAPI_CFLAGS@
 GSSAPI_LIBS = @GSSAPI_LIBS@
 GSSD = @GSSD@
@@ -132,6 +136,7 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 K5VERS = @K5VERS@
 KRBCFLAGS = @KRBCFLAGS@
 KRBDIR = @KRBDIR@
+KRBLDFLAGS = @KRBLDFLAGS@
 KRBLIBS = @KRBLIBS@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
@@ -165,14 +170,9 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 SVCGSSD = @SVCGSSD@
 VERSION = @VERSION@
-ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_F77 = @ac_ct_F77@
-ac_ct_LD = @ac_ct_LD@
-ac_ct_RANLIB = @ac_ct_RANLIB@
-ac_ct_STRIP = @ac_ct_STRIP@
-ac_pt_PKG_CONFIG = @ac_pt_PKG_CONFIG@
 am__fastdepCC_FALSE = @am__fastdepCC_FALSE@
 am__fastdepCC_TRUE = @am__fastdepCC_TRUE@
 am__fastdepCXX_FALSE = @am__fastdepCXX_FALSE@
@@ -189,6 +189,9 @@ build_cpu = @build_cpu@
 build_os = @build_os@
 build_vendor = @build_vendor@
 datadir = @datadir@
+datarootdir = @datarootdir@
+docdir = @docdir@
+dvidir = @dvidir@
 enable_gss = @enable_gss@
 enable_nfsv3 = @enable_nfsv3@
 enable_nfsv4 = @enable_nfsv4@
@@ -198,18 +201,22 @@ host_alias = @host_alias@
 host_cpu = @host_cpu@
 host_os = @host_os@
 host_vendor = @host_vendor@
+htmldir = @htmldir@
 includedir = @includedir@
 infodir = @infodir@
 install_sh = @install_sh@
 kprefix = @kprefix@
 libdir = @libdir@
 libexecdir = @libexecdir@
+localedir = @localedir@
 localstatedir = @localstatedir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
+pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
+psdir = @psdir@
 sbindir = @sbindir@
 secure_statd = @secure_statd@
 sharedstatedir = @sharedstatedir@
@@ -219,16 +226,11 @@ sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 noinst_LIBRARIES = libnfs.a
 libnfs_a_SOURCES = exports.c rmtab.c xio.c rpcmisc.c rpcdispatch.c \
-		   xlog.c xmalloc.c wildmat.c nfssvc.c nfsclient.c \
+		   xlog.c xcommon.c wildmat.c nfssvc.c nfsclient.c \
 		   nfsexport.c getfh.c nfsctl.c lockdsvc.c \
-		   svc_socket.c cacheio.c closeall.c
+		   svc_socket.c cacheio.c closeall.c conn.c fstab.c nfs_mntent.c
 
 MAINTAINERCLEANFILES = Makefile.in
-EXTRA_DIST = \
-	clients.c \
-	keytab.c \
-	ypupdate_xdr.c
-
 all: all-am
 
 .SUFFIXES:
@@ -278,9 +280,12 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cacheio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/closeall.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/conn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/exports.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fstab.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/getfh.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lockdsvc.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfs_mntent.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsclient.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsctl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsexport.Po@am__quote@
@@ -290,9 +295,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rpcmisc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svc_socket.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wildmat.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xcommon.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xlog.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xmalloc.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	if $(COMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" -c -o $@ $<; \
