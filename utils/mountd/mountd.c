@@ -29,7 +29,7 @@
 
 extern void	cache_open(void);
 extern struct nfs_fh_len *cache_get_filehandle(nfs_export *exp, int len, char *p);
-extern void cache_export(nfs_export *exp);
+extern int cache_export(nfs_export *exp);
 
 extern void my_svc_run(void);
 
@@ -37,7 +37,9 @@ static void		usage(const char *, int exitcode);
 static exports		get_exportlist(void);
 static struct nfs_fh_len *get_rootfh(struct svc_req *, dirpath *, mountstat3 *, int v3);
 
+int reverse_resolve = 0;
 int new_cache = 0;
+int manage_gids;
 
 /* PRC: a high-availability callout program can be specified with -H
  * When this is done, the program will receive callouts whenever clients
@@ -66,6 +68,8 @@ static struct option longopts[] =
 	{ "ha-callout", 1, 0, 'H' },
 	{ "state-directory-path", 1, 0, 's' },
 	{ "num-threads", 1, 0, 't' },
+	{ "reverse-lookup", 0, 0, 'r' },
+	{ "manage-gids", 0, 0, 'g' },
 	{ NULL, 0, 0, 0 }
 };
 
@@ -225,14 +229,11 @@ mount_umnt_1_svc(struct svc_req *rqstp, dirpath *argp, void *resp)
 	if (!(exp = auth_authenticate("unmount", sin, p))) {
 		return 1;
 	}
-	if (new_cache) {
-		if (strcmp(inet_ntoa(exp->m_client->m_addrlist[0]), exp->m_client->m_hostname))
-			mountlist_del(inet_ntoa(exp->m_client->m_addrlist[0]), exp->m_client->m_hostname);
-		mountlist_del(exp->m_client->m_hostname, p);
-	} else {
-		mountlist_del(exp->m_client->m_hostname, p);
+
+	if (!new_cache)
 		export_reset (exp);
-	}
+
+	mountlist_del(inet_ntoa(sin->sin_addr), p);
 	return 1;
 }
 
@@ -417,12 +418,17 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, mountstat3 *error, int v3)
 		 */
 		struct nfs_fh_len  *fh;
 
-		cache_export(exp);
+		if (cache_export(exp)) {
+			*error = NFSERR_ACCES;
+			return NULL;
+		}
 		fh = cache_get_filehandle(exp, v3?64:32, p);
 		if (fh == NULL) 
 			*error = NFSERR_ACCES;
-		else
+		else {
 			*error = NFS_OK;
+			mountlist_add(inet_ntoa(sin->sin_addr), p);
+		}
 		return fh;
 	} else {
 		struct nfs_fh_len  *fh;
@@ -443,7 +449,7 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, mountstat3 *error, int v3)
 						stb.st_dev, stb.st_ino);
 		}
 		if (fh != NULL) {
-			mountlist_add(exp->m_client->m_hostname, p);
+			mountlist_add(inet_ntoa(sin->sin_addr), p);
 			*error = NFS_OK;
 			export_reset (exp);
 			return fh;
@@ -459,13 +465,18 @@ static exports
 get_exportlist(void)
 {
 	static exports		elist = NULL;
+	static time_t		etime = 0;
+	time_t			atime;
 	struct exportnode	*e, *ne;
 	struct groupnode	*g, *ng, *c, **cp;
 	nfs_export		*exp;
 	int			i;
 
-	if (!auth_reload() && elist)
+	atime = auth_reload();
+	if (elist && atime == etime)
 		return elist;
+
+	etime = atime;
 
 	for (e = elist; e != NULL; e = ne) {
 		ne = e->ex_next;
@@ -558,8 +569,11 @@ main(int argc, char **argv)
 
 	/* Parse the command line options and arguments. */
 	opterr = 0;
-	while ((c = getopt_long(argc, argv, "o:n:Fd:f:p:P:hH:N:V:vs:t:", longopts, NULL)) != EOF)
+	while ((c = getopt_long(argc, argv, "o:nFd:f:p:P:hH:N:V:vrs:t:g", longopts, NULL)) != EOF)
 		switch (c) {
+		case 'g':
+			manage_gids = 1;
+			break;
 		case 'o':
 			descriptors = atoi(optarg);
 			if (descriptors <= 0) {
@@ -597,6 +611,9 @@ main(int argc, char **argv)
 			break;
 		case 'n':
 			_rpcfdtype = SOCK_DGRAM;
+			break;
+		case 'r':
+			reverse_resolve = 1;
 			break;
 		case 's':
 			if ((state_dir = xstrdup(optarg)) == NULL) {
@@ -734,6 +751,6 @@ usage(const char *prog, int n)
 "	[-p|--port port] [-V version|--nfs-version version]\n"
 "	[-N version|--no-nfs-version version] [-n|--no-tcp]\n"
 "	[-H ha-callout-prog] [-s|--state-directory-path path]\n"
-"	[-t num|--num-threads=num]\n", prog);
+"	[-g|--manage-gids] [-t num|--num-threads=num]\n", prog);
 	exit(n);
 }

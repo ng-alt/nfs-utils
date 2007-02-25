@@ -46,7 +46,7 @@ auth_init(char *exports)
 	xtab_mount_write();
 }
 
-int
+time_t
 auth_reload()
 {
 	struct stat		stb;
@@ -55,7 +55,7 @@ auth_reload()
 	if (stat(_PATH_ETAB, &stb) < 0)
 		xlog(L_FATAL, "couldn't stat %s", _PATH_ETAB);
 	if (stb.st_mtime == last_modified)
-		return 0;
+		return last_modified;
 	last_modified = stb.st_mtime;
 
 	export_freeall();
@@ -63,7 +63,7 @@ auth_reload()
 	// export_read(export_file);
 	xtab_export_read();
 
-	return 1;
+	return last_modified;
 }
 
 static nfs_export *
@@ -76,21 +76,15 @@ auth_authenticate_internal(char *what, struct sockaddr_in *caller,
 	if (new_cache) {
 		int i;
 		/* return static nfs_export with details filled in */
-		if (my_client.m_naddr != 1 ||
-		    my_client.m_addrlist[0].s_addr != caller->sin_addr.s_addr) {
-			/* different client to last time, so do a lookup */
-			char *n;
-			my_client.m_naddr = 0;
-			my_client.m_addrlist[0] = caller->sin_addr;
-			n = client_compose(caller->sin_addr);
-			*error = unknown_host;
-			if (!n)
-				return NULL;
-			strcpy(my_client.m_hostname, *n?n:"DEFAULT");
-			free(n);
-			my_client.m_naddr = 1;
-		}
-
+		char *n;
+		my_client.m_addrlist[0] = caller->sin_addr;
+		n = client_compose(caller->sin_addr);
+		*error = unknown_host;
+		if (!n)
+			return NULL;
+		strcpy(my_client.m_hostname, *n?n:"DEFAULT");
+		free(n);
+		my_client.m_naddr = 1;
 		my_exp.m_client = &my_client;
 
 		exp = NULL;

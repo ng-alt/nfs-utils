@@ -444,7 +444,7 @@ dirscancb(int fd, short which, void *data)
 {
 	int nent, i;
 	struct dirent **ents;
-	struct idmap_client *ic;
+	struct idmap_client *ic, *nextic;
 	char path[PATH_MAX];
 	struct idmap_clientq *icq = data;
 
@@ -464,7 +464,7 @@ dirscancb(int fd, short which, void *data)
 				goto next;
 
 			if ((ic = calloc(1, sizeof(*ic))) == NULL)
-				return;
+				goto out;
 			strlcpy(ic->ic_clid, ents[i]->d_name + 4,
 			    sizeof(ic->ic_clid));
 			path[0] = '\0';
@@ -474,7 +474,7 @@ dirscancb(int fd, short which, void *data)
 			if ((ic->ic_dirfd = open(path, O_RDONLY, 0)) == -1) {
 				idmapd_warn("dirscancb: open(%s)", path);
 				free(ic);
-				return;
+				goto out;
 			}
 
 			strlcat(path, "/idmap", sizeof(path));
@@ -486,7 +486,7 @@ dirscancb(int fd, short which, void *data)
 			if (nfsopen(ic) == -1) {
 				close(ic->ic_dirfd);
 				free(ic);
-				return;
+				goto out;
 			}
 
 			ic->ic_id = "Client";
@@ -498,7 +498,9 @@ dirscancb(int fd, short which, void *data)
 		}
 	}
 
-	TAILQ_FOREACH(ic, icq, ic_next) {
+	ic = TAILQ_FIRST(icq);
+	while(ic != NULL) {
+		nextic=TAILQ_NEXT(ic, ic_next);
 		if (!ic->ic_scanned) {
 			event_del(&ic->ic_event);
 			close(ic->ic_fd);
@@ -511,7 +513,13 @@ dirscancb(int fd, short which, void *data)
 			free(ic);
 		} else
 			ic->ic_scanned = 0;
+		ic = nextic;
 	}
+
+out:
+	for (i = 0;  i < nent; i++)
+		free(ents[i]);
+	free(ents);
 	return;
 }
 
@@ -626,10 +634,18 @@ nfsdcb(int fd, short which, void *data)
 		snprintf(buf1, sizeof(buf1), "%lu",
 			 time(NULL) + cache_entry_expiration);
 		addfield(&bp, &bsiz, buf1);
-		/* ID */
-		snprintf(buf1, sizeof(buf1), "%u", im.im_id);
-		addfield(&bp, &bsiz, buf1);
+		/* Note that we don't want to write the id if the mapping
+		 * failed; instead, by leaving it off, we write a negative
+		 * cache entry which will result in an error returned to
+		 * the client.  We don't want a chown or setacl referring
+		 * to an unknown user to result in giving permissions to
+		 * "nobody"! */
+		if (im.im_status == IDMAP_STATUS_SUCCESS) {
+			/* ID */
+			snprintf(buf1, sizeof(buf1), "%u", im.im_id);
+			addfield(&bp, &bsiz, buf1);
 
+		}
 		//if (bsiz == sizeof(buf)) /* XXX */
 
 		bp[-1] = '\n';
@@ -646,6 +662,8 @@ nfsdcb(int fd, short which, void *data)
 		snprintf(buf1, sizeof(buf1), "%lu",
 			 time(NULL) + cache_entry_expiration);
 		addfield(&bp, &bsiz, buf1);
+		/* Note we're ignoring the status field in this case; we'll
+		 * just map to nobody instead. */
 		/* Name */
 		addfield(&bp, &bsiz, im.im_name);
 
@@ -717,6 +735,13 @@ nfscb(int fd, short which, void *data)
 	}
 
 	imconv(ic, &im);
+
+	/* XXX: I don't like ignoring this error in the id->name case,
+	 * but we've never returned it, and I need to check that the client
+	 * can handle it gracefully before starting to return it now. */
+
+	if (im.im_status == IDMAP_STATUS_LOOKUPFAIL)
+		im.im_status = IDMAP_STATUS_SUCCESS;
 
 	if (atomicio(write, ic->ic_fd, &im, sizeof(im)) != sizeof(im))
 		idmapd_warn("nfscb: write(%s)", ic->ic_path);
@@ -837,8 +862,10 @@ idtonameres(struct idmap_msg *im)
 		}
 		break;
 	}
-	/* XXX Hack? */
-	im->im_status = IDMAP_STATUS_SUCCESS;
+	if (ret)
+		im->im_status = IDMAP_STATUS_LOOKUPFAIL;
+	else
+		im->im_status = IDMAP_STATUS_SUCCESS;
 }
 
 static void
@@ -848,30 +875,29 @@ nametoidres(struct idmap_msg *im)
 	gid_t gid;
 	int ret = 0;
 
-	/* XXX: nobody fallbacks shouldn't always happen:
-	 *	server id -> name should be OK
-	 *	client name -> id should be OK
-	 * but not otherwise */
 	/* XXX: move nobody stuff to library calls
 	 * (nfs4_get_nobody_user(domain), nfs4_get_nobody_group(domain)) */
-	/* XXX: should make this call higher up in the call chain (so we'd
-	 * have a chance on looking up server/whatever. */
+
+	im->im_status = IDMAP_STATUS_SUCCESS;
+
 	switch (im->im_type) {
 	case IDMAP_TYPE_USER:
 		ret = nfs4_name_to_uid(im->im_name, &uid);
 		im->im_id = (u_int32_t) uid;
-		if (ret)
+		if (ret) {
+			im->im_status = IDMAP_STATUS_LOOKUPFAIL;
 			im->im_id = nobodyuid;
-		break;
+		}
+		return;
 	case IDMAP_TYPE_GROUP:
 		ret = nfs4_name_to_gid(im->im_name, &gid);
 		im->im_id = (u_int32_t) gid;
-		if (ret)
+		if (ret) {
+			im->im_status = IDMAP_STATUS_LOOKUPFAIL;
 			im->im_id = nobodygid;
-		break;
+		}
+		return;
 	}
-	/* XXX? */
-	im->im_status = IDMAP_STATUS_SUCCESS;
 }
 
 static int

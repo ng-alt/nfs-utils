@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[1.0.10],[nfs@lists.sf.net],[nfs-utils])
+AC_INIT([linux nfs-utils],[1.0.11],[nfs@lists.sf.net],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_SRCDIR(tools/getiversion/getiversion.c)
@@ -8,6 +8,7 @@ AC_CONFIG_MACRO_DIR(aclocal)
 AM_INIT_AUTOMAKE
 AC_PREREQ(2.59)
 AC_PREFIX_DEFAULT(/usr)
+AM_MAINTAINER_MODE
 
 dnl *************************************************************
 dnl * Define the set of applicable options
@@ -147,8 +148,13 @@ AC_BSD_SIGNALS
 dnl *************************************************************
 dnl * Check for required libraries
 dnl *************************************************************
-AC_CHECK_LIB(socket, main, [LIBSOCKET="-lnsl"])
-AC_CHECK_LIB(nsl, main,	[LIBNSL="-lnsl"])
+AC_CHECK_FUNC(gethostbyname, , [AC_CHECK_LIB(nsl, gethostbyname, [LIBNSL="-lnsl"])])
+AC_SUBST(LIBNSL)
+
+AC_CHECK_FUNC(connect, ,
+      AC_CHECK_LIB(socket, connect, [LIBSOCKET="-lsocket"],
+                AC_MSG_ERROR(Function 'socket' not found.), $LIBNSL))
+
 AC_CHECK_LIB(crypt, crypt, [LIBCRYPT="-lcrypt"])
 if test "$enable_nfsv4" = yes; then
     AC_CHECK_LIB(event, event_dispatch, [libevent=1], AC_MSG_ERROR([libevent needed for nfsv4 support]))
@@ -159,9 +165,7 @@ if test "$enable_nfsv4" = yes; then
     dnl but we need to make sure we get the right version
     if test "$enable_gss" = yes; then
      PKG_CHECK_MODULES(RPCSECGSS, librpcsecgss >= 0.10, ,
-      [AC_MSG_ERROR([Unable to locate information required to use librpcsecgss.])
-       AC_MSG_ERROR([If you have pkgconfig installed, you might try setting environment])
-       AC_MSG_ERROR([variable PKG_CONFIG_PATH to /usr/local/lib/pkgconfig])
+      [AC_MSG_ERROR([Unable to locate information required to use librpcsecgss.  If you have pkgconfig installed, you might try setting environment variable PKG_CONFIG_PATH to /usr/local/lib/pkgconfig])
       ]
      )
     PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.9)
@@ -171,10 +175,12 @@ fi
 if test "$knfsd_cv_glibc2" = no; then
     AC_CHECK_LIB(bsd, daemon, [LIBBSD="-lbsd"])
 fi
+AC_CHECK_LIB(blkid, blkid_get_cache, [LIBBLKID="-lblkid"], AC_MSG_ERROR([libblkid needed]))
+AC_CHECK_HEADER(blkid/blkid.h, , AC_MSG_ERROR([Cannot file libblkid header file blkid/blkid.h]))
 AC_SUBST(LIBSOCKET)
-AC_SUBST(LIBNSL)
 AC_SUBST(LIBCRYPT)
 AC_SUBST(LIBBSD)
+AC_SUBST(LIBBLKID)
 
 if test "$enable_gss" = yes; then
   dnl 'gss' also depends on nfsidmap.h - at least for svcgssd_proc.c
@@ -317,7 +323,6 @@ AC_CONFIG_FILES([
 	support/nfs/Makefile
 	tools/Makefile
 	tools/getiversion/Makefile
-	tools/getkversion/Makefile
 	tools/locktest/Makefile
 	tools/nlmtest/Makefile
 	tools/rpcdebug/Makefile
@@ -331,7 +336,6 @@ AC_CONFIG_FILES([
 	utils/mountd/Makefile
 	utils/nfsd/Makefile
 	utils/nfsstat/Makefile
-	utils/nhfsstone/Makefile
 	utils/rquotad/Makefile
 	utils/showmount/Makefile
 	utils/statd/Makefile])
