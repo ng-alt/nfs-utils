@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[1.1.0],[nfs@lists.sf.net],[nfs-utils])
+AC_INIT([linux nfs-utils],[1.1.1],[nfs@lists.sf.net],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_MACRO_DIR(aclocal)
@@ -123,7 +123,7 @@ AC_ARG_ENABLE(uuid,
 	choose_blkid=default)
 AC_ARG_ENABLE(mount,
 	[AC_HELP_STRING([--enable-mount],
-			[Create mount.nfs and don't use the util-linux mount(8) functionality. @<:@default=no@:>@])],
+			[Create mount.nfs and don't use the util-linux mount(8) functionality. @<:@default=yes@:>@])],
 	enable_mount=$enableval,
 	enable_mount=yes)
 	AM_CONDITIONAL(CONFIG_MOUNT, [test "$enable_mount" = "yes"])
@@ -181,11 +181,11 @@ if test "$enable_nfsv4" = yes; then
     dnl librpcsecgss already has a dependency on libgssapi,
     dnl but we need to make sure we get the right version
     if test "$enable_gss" = yes; then
-     PKG_CHECK_MODULES(RPCSECGSS, librpcsecgss >= 0.10, ,
+     PKG_CHECK_MODULES(RPCSECGSS, librpcsecgss >= 0.16, ,
       [AC_MSG_ERROR([Unable to locate information required to use librpcsecgss.  If you have pkgconfig installed, you might try setting environment variable PKG_CONFIG_PATH to /usr/local/lib/pkgconfig])
       ]
      )
-    PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.11)
+    PKG_CHECK_MODULES(GSSGLUE, libgssglue >= 0.1)
     fi
 
 fi
@@ -228,9 +228,9 @@ if test "$enable_gss" = yes; then
 
   dnl This is not done until here because we need to have KRBLIBS set
   dnl ("librpcsecgss=1" is so that it doesn't get added to LIBS)
-  AC_CHECK_LIB(rpcsecgss, authgss_create_default, [librpcsecgss=1], AC_MSG_ERROR([librpcsecgss needed for nfsv4 support]), -lgssapi -ldl)
+  AC_CHECK_LIB(rpcsecgss, authgss_create_default, [librpcsecgss=1], AC_MSG_ERROR([librpcsecgss needed for nfsv4 support]), -lgssglue -ldl)
   AC_CHECK_LIB(rpcsecgss, authgss_set_debug_level,
-  	       AC_DEFINE(HAVE_AUTHGSS_SET_DEBUG_LEVEL, 1, [Define this if the rpcsec_gss library has the function authgss_set_debug_level]),, -lgssapi -ldl)
+  	       AC_DEFINE(HAVE_AUTHGSS_SET_DEBUG_LEVEL, 1, [Define this if the rpcsec_gss library has the function authgss_set_debug_level]),, -lgssglue -ldl)
 
 fi
 
@@ -284,7 +284,7 @@ AC_CHECK_FUNCS([alarm atexit dup2 fdatasync ftruncate getcwd \
 
 
 dnl *************************************************************
-dnl Check for data sizes (XXX These should go away with libgssapi pkg-config)
+dnl Check for data sizes
 dnl *************************************************************
 AC_CHECK_SIZEOF(short)
 AC_CHECK_SIZEOF(int)
@@ -326,14 +326,14 @@ dnl *************************************************************
 dnl Use architecture-specific compile flags
 dnl (We use $host and not $build in case we are cross-compiling)
 dnl *************************************************************
+dnl Note: we no longer have arch specific compile flags, but 
+dnl the stub is left here in case they are needed one day.
 case $host in
-  alpha*)
-    ARCHFLAGS="-mno-fp-regs -ffixed-8" ;;
   *)
     ARCHFLAGS="" ;;
 esac
 
-my_am_cflags="-Wall $ARCHFLAGS -pipe"
+my_am_cflags="-Wall -Wstrict-prototypes $ARCHFLAGS -pipe"
 
 AC_SUBST([AM_CPPFLAGS], ["-I\${top_srcdir}/support/include"])
 AC_SUBST([AM_CFLAGS], ["$my_am_cflags"])

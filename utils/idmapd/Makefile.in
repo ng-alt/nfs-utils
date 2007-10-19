@@ -52,7 +52,7 @@ am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man5dir)" \
 sbinPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 PROGRAMS = $(sbin_PROGRAMS)
 am_idmapd_OBJECTS = atomicio.$(OBJEXT) cfg.$(OBJEXT) idmapd.$(OBJEXT) \
-	setproctitle.$(OBJEXT) strlcat.$(OBJEXT) strlcpy.$(OBJEXT)
+	strlcat.$(OBJEXT) strlcpy.$(OBJEXT)
 idmapd_OBJECTS = $(am_idmapd_OBJECTS)
 idmapd_DEPENDENCIES = ../../support/nfs/libnfs.a
 DEFAULT_INCLUDES = -I. -I$(top_builddir)/support/include@am__isrc@
@@ -112,9 +112,9 @@ EXEEXT = @EXEEXT@
 F77 = @F77@
 FFLAGS = @FFLAGS@
 GREP = @GREP@
-GSSAPI_CFLAGS = @GSSAPI_CFLAGS@
-GSSAPI_LIBS = @GSSAPI_LIBS@
 GSSD = @GSSD@
+GSSGLUE_CFLAGS = @GSSGLUE_CFLAGS@
+GSSGLUE_LIBS = @GSSGLUE_LIBS@
 HAVE_LIBWRAP = @HAVE_LIBWRAP@
 HAVE_TCP_WRAPPER = @HAVE_TCP_WRAPPER@
 IDMAPD = @IDMAPD@
@@ -159,6 +159,7 @@ RELEASE = @RELEASE@
 RPCGEN_PATH = @RPCGEN_PATH@
 RPCSECGSS_CFLAGS = @RPCSECGSS_CFLAGS@
 RPCSECGSS_LIBS = @RPCSECGSS_LIBS@
+SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
@@ -236,7 +237,6 @@ idmapd_SOURCES = \
 	atomicio.c \
 	cfg.c \
 	idmapd.c \
-	setproctitle.c \
 	strlcat.c \
 	strlcpy.c \
 	\
@@ -320,7 +320,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/atomicio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cfg.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/idmapd.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/setproctitle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/strlcat.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/strlcpy.Po@am__quote@
 

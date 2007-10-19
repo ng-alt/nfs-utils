@@ -55,8 +55,7 @@ am_libnfs_a_OBJECTS = exports.$(OBJEXT) rmtab.$(OBJEXT) xio.$(OBJEXT) \
 	xcommon.$(OBJEXT) wildmat.$(OBJEXT) nfssvc.$(OBJEXT) \
 	nfsclient.$(OBJEXT) nfsexport.$(OBJEXT) getfh.$(OBJEXT) \
 	nfsctl.$(OBJEXT) svc_socket.$(OBJEXT) cacheio.$(OBJEXT) \
-	closeall.$(OBJEXT) conn.$(OBJEXT) fstab.$(OBJEXT) \
-	nfs_mntent.$(OBJEXT)
+	closeall.$(OBJEXT) nfs_mntent.$(OBJEXT)
 libnfs_a_OBJECTS = $(am_libnfs_a_OBJECTS)
 DEFAULT_INCLUDES = -I. -I$(top_builddir)/support/include@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -111,9 +110,9 @@ EXEEXT = @EXEEXT@
 F77 = @F77@
 FFLAGS = @FFLAGS@
 GREP = @GREP@
-GSSAPI_CFLAGS = @GSSAPI_CFLAGS@
-GSSAPI_LIBS = @GSSAPI_LIBS@
 GSSD = @GSSD@
+GSSGLUE_CFLAGS = @GSSGLUE_CFLAGS@
+GSSGLUE_LIBS = @GSSGLUE_LIBS@
 HAVE_LIBWRAP = @HAVE_LIBWRAP@
 HAVE_TCP_WRAPPER = @HAVE_TCP_WRAPPER@
 IDMAPD = @IDMAPD@
@@ -158,6 +157,7 @@ RELEASE = @RELEASE@
 RPCGEN_PATH = @RPCGEN_PATH@
 RPCSECGSS_CFLAGS = @RPCSECGSS_CFLAGS@
 RPCSECGSS_LIBS = @RPCSECGSS_LIBS@
+SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
@@ -226,7 +226,7 @@ noinst_LIBRARIES = libnfs.a
 libnfs_a_SOURCES = exports.c rmtab.c xio.c rpcmisc.c rpcdispatch.c \
 		   xlog.c xcommon.c wildmat.c nfssvc.c nfsclient.c \
 		   nfsexport.c getfh.c nfsctl.c \
-		   svc_socket.c cacheio.c closeall.c conn.c fstab.c nfs_mntent.c
+		   svc_socket.c cacheio.c closeall.c nfs_mntent.c
 
 MAINTAINERCLEANFILES = Makefile.in
 all: all-am
@@ -278,9 +278,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cacheio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/closeall.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/conn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/exports.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fstab.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/getfh.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfs_mntent.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsclient.Po@am__quote@

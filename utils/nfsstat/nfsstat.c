@@ -8,7 +8,7 @@
 #include <config.h>
 #endif
 
-#define NFSSVCSTAT	"/proc/net/rpc/nfsd"
+#define NFSSRVSTAT	"/proc/net/rpc/nfsd"
 #define NFSCLTSTAT	"/proc/net/rpc/nfs"
 
 #define MOUNTSFILE	"/proc/mounts"
@@ -20,58 +20,60 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
+#include <time.h>
 
 #define MAXNRVALS	32
 
-static unsigned int	svcv2info[20];	/* NFSv2 call counts ([0] == 18) */
-static unsigned int	cltv2info[20];	/* NFSv2 call counts ([0] == 18) */
-static unsigned int	svcv3info[24];	/* NFSv3 call counts ([0] == 22) */
-static unsigned int	cltv3info[24];	/* NFSv3 call counts ([0] == 22) */
-static unsigned int	svcv4info[4];	/* NFSv4 call counts ([0] == 2) */
-static unsigned int	cltv4info[34];	/* NFSv4 call counts ([0] == 32) */
-static unsigned int	svcv4opinfo[42];/* NFSv4 call counts ([0] == 40) */
-static unsigned int	svcnetinfo[5];	/* 0  # of received packets
-					 * 1  UDP packets
-					 * 2  TCP packets
-					 * 3  TCP connections
-					 */
-static unsigned int	cltnetinfo[5];	/* 0  # of received packets
-					 * 1  UDP packets
-					 * 2  TCP packets
-					 * 3  TCP connections
-					 */
+static unsigned int	srvproc2info[20], srvproc2info_old[20];	/* NFSv2 call counts ([0] == 18) */
+static unsigned int	cltproc2info[20], cltproc2info_old[20];	/* NFSv2 call counts ([0] == 18) */
+static unsigned int	srvproc3info[24], srvproc3info_old[24];	/* NFSv3 call counts ([0] == 22) */
+static unsigned int	cltproc3info[24], cltproc3info_old[24];	/* NFSv3 call counts ([0] == 22) */
+static unsigned int	srvproc4info[4], srvproc4info_old[4];	/* NFSv4 call counts ([0] == 2) */
+static unsigned int	cltproc4info[37], cltproc4info_old[37];	/* NFSv4 call counts ([0] == 35) */
+static unsigned int	srvproc4opsinfo[42], srvproc4opsinfo_old[42];	/* NFSv4 call counts ([0] == 40) */
+static unsigned int	srvnetinfo[5], srvnetinfo_old[5];	/* 0  # of received packets
+								 * 1  UDP packets
+								 * 2  TCP packets
+								 * 3  TCP connections
+								 */
+static unsigned int	cltnetinfo[5], cltnetinfo_old[5];	/* 0  # of received packets
+								 * 1  UDP packets
+								 * 2  TCP packets
+								 * 3  TCP connections
+								 */
 
-static unsigned int	svcrpcinfo[6];	/* 0  total # of RPC calls
-					 * 1  total # of bad calls
-					 * 2  bad format
-					 * 3  authentication failed
-					 * 4  unknown client
-					 */
-static unsigned int	cltrpcinfo[4];	/* 0  total # of RPC calls
-					 * 1  retransmitted calls
-					 * 2  cred refreshs
-					 */
+static unsigned int	srvrpcinfo[6], srvrpcinfo_old[6];	/* 0  total # of RPC calls
+								 * 1  total # of bad calls
+								 * 2  bad format
+								 * 3  authentication failed
+								 * 4  unknown client
+								 */
+static unsigned int	cltrpcinfo[4], cltrpcinfo_old[4];	/* 0  total # of RPC calls
+								 * 1  retransmitted calls
+								 * 2  cred refreshs
+								 */
 
-static unsigned int	svcrcinfo[9];	/* 0  repcache hits
-					 * 1  repcache hits
-					 * 2  uncached reqs
-					 * (for pre-2.4 kernels:)
-					 * 3  FH lookups
-					 * 4  'anon' FHs
-					 * 5  noncached non-directories
-					 * 6  noncached directories
-					 * 7  stale
-					 */
+static unsigned int	srvrcinfo[9], srvrcinfo_old[9];		/* 0  repcache hits
+								 * 1  repcache hits
+								 * 2  uncached reqs
+								 * (for pre-2.4 kernels:)
+								 * 3  FH lookups
+								 * 4  'anon' FHs
+								 * 5  noncached non-directories
+								 * 6  noncached directories
+								 * 7  stale
+								 */
 
-static unsigned int	svcfhinfo[7];	/* (for kernels >= 2.4.0)
-					 * 0  stale
-					 * 1  FH lookups
-					 * 2  'anon' FHs
-					 * 3  noncached directories
-					 * 4  noncached non-directories
-					 * leave hole to relocate stale for order
-					 *    compatability.
-					 */
+static unsigned int	srvfhinfo[7], srvfhinfo_old[7];		/* (for kernels >= 2.4.0)
+								 * 0  stale
+								 * 1  FH lookups
+								 * 2  'anon' FHs
+								 * 3  noncached directories
+								 * 4  noncached non-directories
+								 * leave hole to relocate stale for order
+								 *    compatability.
+								 */
 
 static const char *	nfsv2name[18] = {
 	"null", "getattr", "setattr", "root",   "lookup",  "readlink",
@@ -86,21 +88,22 @@ static const char *	nfsv3name[22] = {
 	"fsstat", "fsinfo",  "pathconf", "commit"
 };
 
-static const char *	nfssvrv4name[2] = {
+static const char *	nfssrvproc4name[2] = {
 	"null",
 	"compound",
 };
 
-static const char *	nfscltv4name[32] = {
+static const char *	nfscltproc4name[35] = {
 	"null",      "read",      "write",   "commit",      "open",        "open_conf",
 	"open_noat", "open_dgrd", "close",   "setattr",     "fsinfo",      "renew",
 	"setclntid", "confirm",   "lock",
 	"lockt",     "locku",     "access",  "getattr",     "lookup",      "lookup_root",
 	"remove",    "rename",    "link",    "symlink",     "create",      "pathconf",
-	"statfs",    "readlink",  "readdir", "server_caps", "delegreturn",
+	"statfs",    "readlink",  "readdir", "server_caps", "delegreturn", "getacl",
+	"setacl",    "fs_locations"
 };
 
-static const char *     nfssvrv4opname[40] = {
+static const char *     nfssrvproc4opname[40] = {
         "op0-unused",   "op1-unused", "op2-future",  "access",     "close",       "commit",
         "create",       "delegpurge", "delegreturn", "getattr",    "getfh",       "link",
         "lock",         "lockt",      "locku",       "lookup",     "lookup_root", "nverify",
@@ -110,44 +113,78 @@ static const char *     nfssvrv4opname[40] = {
         "setcltidconf", "verify",     "write",       "rellockowner"
 };
 
+#define LABEL_srvnet		"Server packet stats:\n"
+#define LABEL_srvrpc		"Server rpc stats:\n"
+#define LABEL_srvrc		"Server reply cache:\n"
+#define LABEL_srvfh		"Server file handle cache:\n"
+#define LABEL_srvproc2		"Server nfs v2:\n"
+#define LABEL_srvproc3		"Server nfs v3:\n"
+#define LABEL_srvproc4		"Server nfs v4:\n"
+#define LABEL_srvproc4ops	"Server nfs v4 operations:\n"
+#define LABEL_cltnet		"Client packet stats:\n"
+#define LABEL_cltrpc		"Client rpc stats:\n"
+#define LABEL_cltproc2		"Client nfs v2:\n"
+#define LABEL_cltproc3		"Client nfs v3:\n"
+#define LABEL_cltproc4		"Client nfs v4:\n"
+
 typedef struct statinfo {
 	char		*tag;
+	char		*label;
 	int		nrvals;
 	unsigned int *	valptr;
 } statinfo;
 
-#define STRUCTSIZE(x)   sizeof(x)/sizeof(*x)
-
-static statinfo		svcinfo[] = {
-	{ "net",        STRUCTSIZE(svcnetinfo), svcnetinfo },
-	{ "rpc",        STRUCTSIZE(svcrpcinfo), svcrpcinfo },
-	{ "rc",         STRUCTSIZE(svcrcinfo),  svcrcinfo  },
-	{ "fh",         STRUCTSIZE(svcfhinfo),  svcfhinfo  },
-	{ "proc2",      STRUCTSIZE(svcv2info),  svcv2info  },
-	{ "proc3",      STRUCTSIZE(svcv3info),  svcv3info  },
-	{ "proc4",      STRUCTSIZE(svcv4info),  svcv4info  },
-	{ "proc4ops",   STRUCTSIZE(svcv4opinfo),svcv4opinfo},
-	{ NULL,         0,                      NULL       }
-};
-
-static statinfo		cltinfo[] = {
-	{ "net",        STRUCTSIZE(cltnetinfo), cltnetinfo },
-	{ "rpc",        STRUCTSIZE(cltrpcinfo), cltrpcinfo },
-	{ "proc2",      STRUCTSIZE(cltv2info),  cltv2info  },
-	{ "proc3",      STRUCTSIZE(cltv3info),  cltv3info  },
-	{ "proc4",      STRUCTSIZE(cltv4info),  cltv4info  },
-	{ NULL,         0,                      NULL       }
-};
+/*
+ * We now build the arrays of statinfos using macros, which will make it easier
+ * to add new variables for --sleep.  e.g., SRV(net) expands into the struct
+ * statinfo:  { "net", "Server packet stats:\n", 5, srvnetinfo }
+ */
+#define ARRAYSIZE(x)		sizeof(x)/sizeof(*x)
+#define STATINFO(k, t, s...)	{ #t, LABEL_##k##t, ARRAYSIZE(k##t##info##s), k##t##info##s }
+#define SRV(t, s...)		STATINFO(srv, t, s)
+#define CLT(t, s...)		STATINFO(clt, t, s)
+#define DECLARE_SRV(n, s...)	static statinfo n##s[] = { \
+					SRV(net,s), \
+					SRV(rpc,s), \
+					SRV(rc,s), \
+					SRV(fh,s), \
+					SRV(proc2,s), \
+					SRV(proc3,s),\
+					SRV(proc4,s), \
+					SRV(proc4ops,s),\
+					{ NULL, NULL, 0, NULL }\
+				}
+#define DECLARE_CLT(n, s...)  	static statinfo n##s[] = { \
+					CLT(net,s), \
+					CLT(rpc,s), \
+					CLT(proc2,s),\
+					CLT(proc3,s), \
+					CLT(proc4,s),\
+					{ NULL, NULL, 0, NULL }\
+				}
+DECLARE_SRV(srvinfo);
+DECLARE_SRV(srvinfo, _old);
+DECLARE_CLT(cltinfo);
+DECLARE_CLT(cltinfo, _old);
 
 static void		print_numbers(const char *, unsigned int *,
 					unsigned int);
 static void		print_callstats(const char *, const char **,
 					unsigned int *, unsigned int);
-static int		parse_statfile(const char *, struct statinfo *);
+static int		parse_raw_statfile(const char *, struct statinfo *);
+static int 		parse_pretty_statfile(const char *, struct statinfo *);
 
 static statinfo		*get_stat_info(const char *, struct statinfo *);
 
-static int             mounts(const char *);
+static int		mounts(const char *);
+
+static void		get_stats(const char *, struct statinfo *, int *, int,
+					int);
+static int		has_stats(const unsigned int *);
+static void 		diff_stats(struct statinfo *, struct statinfo *, int);
+static void 		unpause(int);
+
+static time_t		starttime;
 
 #define PRNT_CALLS	0x0001
 #define PRNT_RPC	0x0002
@@ -186,6 +223,8 @@ void usage(char *name)
   -v, --verbose, --all\tSame as '-o all'\n\
   -r, --rpc\t\tShow RPC statistics\n\
   -n, --nfs\t\tShow NFS statistics\n\
+  -Z, --sleep\t\tSaves stats, pauses, diffs current and saved\n\
+  -S, --since file\tShows difference between current stats and those in 'file'\n\
   --version\t\tShow program version\n\
   --help\t\tWhat you just did\n\
 \n", name);
@@ -206,6 +245,8 @@ static struct option longopts[] =
 	{ "zero", 0, 0, 'z' },
 	{ "help", 0, 0, '\1' },
 	{ "version", 0, 0, '\2' },
+	{ "sleep", 0, 0, 'Z' },
+	{ "since", 1, 0, 'S' },
 	{ NULL, 0, 0, 0 }
 };
 
@@ -215,18 +256,30 @@ main(int argc, char **argv)
 	int		opt_all = 0,
 			opt_srv = 0,
 			opt_clt = 0,
-			srv_info = 0,
-			clt_info = 0,
-			opt_prt = 0;
+			opt_prt = 0,
+			opt_sleep = 0,
+			opt_since = 0;
 	int		c;
-	char           *progname;
- 
+	char           *progname,
+		       *serverfile = NFSSRVSTAT,
+		       *clientfile = NFSCLTSTAT;
+
+	struct statinfo *serverinfo = srvinfo,
+			*serverinfo_tmp = srvinfo_old,
+			*clientinfo = cltinfo,
+			*clientinfo_tmp = cltinfo_old;
+
+	struct sigaction act = {
+		.sa_handler = unpause,
+		.sa_flags = SA_ONESHOT,
+	};
+
 	if ((progname = strrchr(argv[0], '/')))
 		progname++;
 	else
 		progname = argv[0];
 
-	while ((c = getopt_long(argc, argv, "234acmno:vrsz\1\2", longopts, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "234acmno:ZS:vrsz\1\2", longopts, NULL)) != EOF) {
 		switch (c) {
 		case 'a':
 			fprintf(stderr, "nfsstat: nfs acls are not yet supported.\n");
@@ -255,6 +308,14 @@ main(int argc, char **argv)
 						"%s\n", optarg);
 				return 2;
 			}
+			break;
+		case 'Z':
+			opt_sleep = 1;
+			break;
+		case 'S':
+			opt_since = 1;
+			serverfile = optarg;
+			clientfile = optarg;
 			break;
 		case '2':
 		case '3':
@@ -311,48 +372,61 @@ main(int argc, char **argv)
 			"server.\n");
 	}
 
-	if (opt_srv) {
-		srv_info = parse_statfile(NFSSVCSTAT, svcinfo);
-		if (srv_info == 0 && opt_clt == 0) {
-			fprintf(stderr, "Warning: No Server Stats (%s: %m).\n", NFSSVCSTAT);
-			return 2;
-		}
-		if (srv_info == 0)
-			opt_srv = 0;
+	if (opt_since || opt_sleep) {
+		serverinfo = srvinfo_old;
+		serverinfo_tmp = srvinfo;
+		clientinfo = cltinfo_old;
+		clientinfo_tmp = cltinfo;
 	}
 
-	if (opt_clt) {
-		clt_info = parse_statfile(NFSCLTSTAT, cltinfo);
-		if (opt_srv == 0 && clt_info == 0) {
-			fprintf(stderr, "Warning: No Client Stats (%s: %m).\n", NFSCLTSTAT);
-			return 2;
+	if (opt_srv)
+		get_stats(serverfile, serverinfo, &opt_srv, opt_clt, 1);
+	if (opt_clt)
+		get_stats(clientfile, clientinfo, &opt_clt, opt_srv, 0);
+
+	if (opt_sleep) {
+		starttime = time(NULL);
+		printf("Collecting statistics; press CTRL-C to view results from interval (i.e., from pause to CTRL-C).\n");
+		if (sigaction(SIGINT, &act, NULL) != 0) {
+			fprintf(stderr, "Error: couldn't register for signal and pause.\n");
+			return 1;
 		}
-		if (clt_info == 0)
-			opt_clt = 0;
+		pause();
+	}
+
+	if (opt_since || opt_sleep) {
+		if (opt_srv) {
+			get_stats(NFSSRVSTAT, serverinfo_tmp, &opt_srv, opt_clt, 1);
+			diff_stats(serverinfo_tmp, serverinfo, 1);
+		}
+		if (opt_clt) {
+			get_stats(NFSCLTSTAT, clientinfo_tmp, &opt_clt, opt_srv, 0);
+			diff_stats(clientinfo_tmp, clientinfo, 0);
+		}
 	}
 
 	if (opt_srv) {
 		if (opt_prt & PRNT_NET) {
 			print_numbers(
-			"Server packet stats:\n"
+			LABEL_srvnet
 			"packets    udp        tcp        tcpconn\n",
-			svcnetinfo, 4
+			srvnetinfo, 4
 			);
 			printf("\n");
 		}
 		if (opt_prt & PRNT_RPC) {
 			print_numbers(
-			"Server rpc stats:\n"
+			LABEL_srvrpc
 			"calls      badcalls   badauth    badclnt    xdrcall\n",
-			svcrpcinfo, 5
+			srvrpcinfo, 5
 			);
 			printf("\n");
 		}
 		if (opt_prt & PRNT_RC) {
 			print_numbers(
-			"Server reply cache:\n"
+			LABEL_srvrc
 			"hits       misses     nocache\n",
-			svcrcinfo, 3
+			srvrcinfo, 3
 			);
 			printf("\n");
 		}
@@ -364,43 +438,43 @@ main(int argc, char **argv)
 		 *     We preseve the 2.2 order
 		 */
 		if (opt_prt & PRNT_FH) {
-			if (get_stat_info("fh", svcinfo)) {	/* >= 2.4 */
-				int t = svcfhinfo[3];
-				svcfhinfo[3]=svcfhinfo[4];
-				svcfhinfo[4]=t;
+			if (get_stat_info("fh", srvinfo)) {	/* >= 2.4 */
+				int t = srvfhinfo[3];
+				srvfhinfo[3]=srvfhinfo[4];
+				srvfhinfo[4]=t;
 				
-				svcfhinfo[5]=svcfhinfo[0]; /* relocate 'stale' */
+				srvfhinfo[5]=srvfhinfo[0]; /* relocate 'stale' */
 				
 				print_numbers(
-					"Server file handle cache:\n"
+					LABEL_srvfh
 					"lookup     anon       ncachedir  ncachedir  stale\n",
-					svcfhinfo + 1, 5);
+					srvfhinfo + 1, 5);
 			} else					/* < 2.4 */
 				print_numbers(
-					"Server file handle cache:\n"
+					LABEL_srvfh
 					"lookup     anon       ncachedir  ncachedir  stale\n",
-					svcrcinfo + 3, 5);
+					srvrcinfo + 3, 5);
 			printf("\n");
 		}
 		if (opt_prt & PRNT_CALLS) {
-			if ((opt_prt & PRNT_V2) || ((opt_prt & PRNT_AUTO) && svcv2info[0] && svcv2info[svcv2info[0]+1] != svcv2info[0]))
+			if ((opt_prt & PRNT_V2) || ((opt_prt & PRNT_AUTO) && has_stats(srvproc2info)))
 				print_callstats(
-				"Server nfs v2:\n",
-				    nfsv2name, svcv2info + 1, sizeof(nfsv2name)/sizeof(char *)
+				LABEL_srvproc2,
+				nfsv2name, srvproc2info + 1, sizeof(nfsv2name)/sizeof(char *)
 				);
-			if ((opt_prt & PRNT_V3) || ((opt_prt & PRNT_AUTO) && svcv3info[0] && svcv3info[svcv3info[0]+1] != svcv3info[0]))
+			if ((opt_prt & PRNT_V3) || ((opt_prt & PRNT_AUTO) && has_stats(srvproc3info)))
 				print_callstats(
-				"Server nfs v3:\n",
-				nfsv3name, svcv3info + 1, sizeof(nfsv3name)/sizeof(char *)
+				LABEL_srvproc3,
+				nfsv3name, srvproc3info + 1, sizeof(nfsv3name)/sizeof(char *)
 				);
-			if ((opt_prt & PRNT_V4) || ((opt_prt & PRNT_AUTO) && svcv4info[0] && svcv4info[svcv4info[0]+1] != svcv4info[0])) {
+			if ((opt_prt & PRNT_V4) || ((opt_prt & PRNT_AUTO) && has_stats(srvproc4info))) {
 				print_callstats(
-				"Server nfs v4:\n",
-				nfssvrv4name, svcv4info + 1, sizeof(nfssvrv4name)/sizeof(char *)
+				LABEL_srvproc4,
+				nfssrvproc4name, srvproc4info + 1, sizeof(nfssrvproc4name)/sizeof(char *)
 				);
 				print_callstats(
-				"Server nfs v4 operations:\n",
-				nfssvrv4opname, svcv4opinfo + 1, sizeof(nfssvrv4opname)/sizeof(char *)
+				LABEL_srvproc4ops,
+				nfssrvproc4opname, srvproc4opsinfo + 1, sizeof(nfssrvproc4opname)/sizeof(char *)
 				);
 			}
 		}
@@ -409,7 +483,7 @@ main(int argc, char **argv)
 	if (opt_clt) {
 		if (opt_prt & PRNT_NET) {
 			print_numbers(
-			"Client packet stats:\n"
+			LABEL_cltnet
 			"packets    udp        tcp        tcpconn\n",
 			cltnetinfo, 4
 			);
@@ -417,27 +491,27 @@ main(int argc, char **argv)
 		}
 		if (opt_prt & PRNT_RPC) {
 			print_numbers(
-			"Client rpc stats:\n"
+			LABEL_cltrpc
 			"calls      retrans    authrefrsh\n",
 			cltrpcinfo, 3
 			);
 			printf("\n");
 		}
 		if (opt_prt & PRNT_CALLS) {
-			if ((opt_prt & PRNT_V2) || ((opt_prt & PRNT_AUTO) && cltv2info[0] && cltv2info[cltv2info[0]+1] != cltv2info[0]))
+			if ((opt_prt & PRNT_V2) || ((opt_prt & PRNT_AUTO) && has_stats(cltproc2info)))
 				print_callstats(
-				"Client nfs v2:\n",
-				nfsv2name, cltv2info + 1,  sizeof(nfsv2name)/sizeof(char *)
+				LABEL_cltproc2,
+				nfsv2name, cltproc2info + 1,  sizeof(nfsv2name)/sizeof(char *)
 				);
-			if ((opt_prt & PRNT_V3) || ((opt_prt & PRNT_AUTO) && cltv3info[0] && cltv3info[cltv3info[0]+1] != cltv3info[0]))
+			if ((opt_prt & PRNT_V3) || ((opt_prt & PRNT_AUTO) && has_stats(cltproc3info)))
 				print_callstats(
-				"Client nfs v3:\n",
-				nfsv3name, cltv3info + 1, sizeof(nfsv3name)/sizeof(char *)
+				LABEL_cltproc3,
+				nfsv3name, cltproc3info + 1, sizeof(nfsv3name)/sizeof(char *)
 				);
-			if ((opt_prt & PRNT_V4) || ((opt_prt & PRNT_AUTO) && cltv4info[0] && cltv4info[cltv4info[0]+1] != cltv4info[0]))
+			if ((opt_prt & PRNT_V4) || ((opt_prt & PRNT_AUTO) && has_stats(cltproc4info)))
 				print_callstats(
-				"Client nfs v4:\n",
-				nfscltv4name, cltv4info + 1,  sizeof(nfscltv4name)/sizeof(char *)
+				LABEL_cltproc4,
+				nfscltproc4name, cltproc4info + 1,  sizeof(nfscltproc4name)/sizeof(char *)
 				);
 		}
 	}
@@ -495,9 +569,9 @@ print_callstats(const char *hdr, const char **names,
 	printf("\n");
 }
 
-
+/* returns 0 on success, 1 otherwise */
 static int
-parse_statfile(const char *name, struct statinfo *statp)
+parse_raw_statfile(const char *name, struct statinfo *statp)
 {
 	char	buffer[4096], *next;
 	FILE	*fp;
@@ -507,7 +581,7 @@ parse_statfile(const char *name, struct statinfo *statp)
 	 */
 	if ((fp = fopen(name, "r")) == NULL) {
 		// fprintf(stderr, "Warning: %s: %m\n", name);
-		return 0;
+		return 1;
 	}
 
 	while (fgets(buffer, sizeof(buffer), fp) != NULL) {
@@ -533,11 +607,83 @@ parse_statfile(const char *name, struct statinfo *statp)
 			ip->valptr[i] = atoi(sp);
 			total += ip->valptr[i];
 		}
-		ip->valptr[i] = total;
+		ip->valptr[cnt - 1] = total;
 	}
 
 	fclose(fp);
-	return 1;
+	return 0;
+}
+
+/* returns 0 on success, 1 otherwise */
+static int
+parse_pretty_statfile(const char *filename, struct statinfo *info)
+{
+	int numvals, curindex, numconsumed, n, sum, err = 1;
+	char buf[4096], *bufp, *fmt, is_proc;
+	FILE *fp = NULL;
+	struct statinfo *ip;
+
+	if ((fp = fopen(filename, "r")) == NULL)
+		//err(2, "Unable to open statfile '%s'.\n", filename);
+		goto out;
+
+	while (fgets(buf, sizeof(buf), fp) != NULL) {
+		for (ip = info; ip->tag; ip++) {
+			if (strcmp(buf, ip->label))
+				continue;
+
+			sum = 0;
+			numvals = ip->nrvals - 1;
+			is_proc = strncmp("proc", ip->tag, 4) ? 0 : 1;
+			if (is_proc) {
+				fmt = " %u %*u%% %n";
+				curindex = 1;
+				ip->valptr[0] = 0;
+			} else {
+				fmt = " %u %n";
+				curindex = 0;
+			}
+more_stats:
+			/* get (and skip) header */
+			if (fgets(buf, sizeof(buf), fp) == NULL) {
+				fprintf(stderr, "Failed to locate header after "
+						"label for '%s' in %s.\n",
+						ip->tag, filename);
+				goto out;
+			}
+			/* no header -- done with this "tag" */
+			if (*buf == '\n') {
+				ip->valptr[numvals] = sum;
+				break;
+			}
+			/* get stats */
+			if (fgets(buf, sizeof(buf), fp) == NULL) {
+				fprintf(stderr, "Failed to locate stats after "
+						"header for '%s' in %s.\n",
+						ip->tag, filename);
+				goto out;
+			}
+			bufp = buf;
+			for (; curindex < numvals; curindex++) {
+				n = sscanf(bufp, fmt, &ip->valptr[curindex],
+						&numconsumed);
+				if (n != 1)
+					break;
+				if (is_proc) {
+					ip->valptr[0]++;
+					sum++;
+				}
+				sum += ip->valptr[curindex];
+				bufp += numconsumed;
+			}
+			goto more_stats;
+		}
+	}
+	err = 0;
+out:
+	if (fp)
+		fclose(fp);
+	return err;
 }
 
 static int
@@ -586,4 +732,116 @@ mounts(const char *name)
 
 	fclose(fp);
 	return 1;
+}
+
+static void
+get_stats(const char *file, struct statinfo *info, int *opt, int other_opt,
+		int is_srv)
+{
+	FILE *fp;
+	char buf[10];
+	int err = 1;
+	char *label = is_srv ? "Server" : "Client";
+
+	/* try to guess what type of stat file we're dealing with */
+	if ((fp = fopen(file, "r")) == NULL)
+		goto out;
+	if (fgets(buf, 10, fp) == NULL)
+		goto out;
+	if (!strncmp(buf, "net ", 4)) {
+		/* looks like raw client stats */
+		if (is_srv) {
+			fprintf(stderr, "Warning: no server info present in "
+					"raw client stats file.\n");
+			*opt = 0;
+		} else
+			err = parse_raw_statfile(file, info);
+	} else if (!strncmp(buf, "rc ", 3)) {
+		/* looks like raw server stats */
+		if (!is_srv) {
+			fprintf(stderr, "Warning: no client info present in "
+					"raw server stats file.\n");
+			*opt = 0;
+		} else
+			err = parse_raw_statfile(file, info);
+	} else
+		/* looks like pretty client and server stats */
+		err = parse_pretty_statfile(file, info);
+out:
+	if (fp)
+		fclose(fp);
+	if (err) {
+		if (!other_opt) {
+			fprintf(stderr, "Error: No %s Stats (%s: %m). \n",
+					label, file);
+			exit(2);
+		}
+		*opt = 0;
+	}
+}
+
+/*
+ * This is for proc2/3/4-type stats, where, in the /proc files, the first entry's value
+ * denotes the number of subsequent entries.  statinfo value arrays contain an additional
+ * field at the end which contains the sum of all previous elements in the array -- so,
+ * there are stats if the sum's greater than the entry-count.
+ */
+static int
+has_stats(const unsigned int *info)
+{
+	return (info[0] && info[info[0] + 1] > info[0]);
+}
+
+/*
+ * take the difference of each individual stat value in 'new' and 'old'
+ * and store the results back into 'new'
+ */
+static void
+diff_stats(struct statinfo *new, struct statinfo *old, int is_srv)
+{
+	int i, j, nodiff_first_index, should_diff;
+
+	/*
+	 * Different stat types have different formats in the /proc
+	 * files: for the proc2/3/4-type stats, the first entry has
+	 * the total number of subsequent entries; one does not want
+	 * to diff that first entry.  The other stat types aren't like
+	 * this.  So, we diff a given entry if it's not of one of the
+	 * procX types ("i" < 2 for clt, < 4 for srv), or if it's not
+	 * the first entry ("j" > 0).
+	 */
+	nodiff_first_index = 2 + (2 * is_srv);
+
+	for (i = 0; old[i].tag; i++) {
+		for (j = 0; j < new[i].nrvals; j++) {
+			should_diff = (i < nodiff_first_index || j > 0);
+			if (should_diff)
+				new[i].valptr[j] -= old[i].valptr[j];
+		}
+
+		/*
+		 * Make sure that the "totals" entry (last value in
+		 * each stat array) for the procX-type stats has the
+		 * "numentries" entry's (first value in procX-type
+		 * stat arrays) constant value added-back after the
+		 * diff -- i.e., it should always be included in the
+		 * total.
+		 */
+		if (!strncmp("proc", new[i].tag, 4) && old[i].valptr[0])
+			new[i].valptr[new[i].nrvals - 1] += new[i].valptr[0];
+	}
+}
+
+static void
+unpause(int sig)
+{
+	double time_diff;
+	int minutes, seconds;
+	time_t endtime;
+
+	endtime = time(NULL);
+	time_diff = difftime(endtime, starttime);
+	minutes = time_diff / 60;
+	seconds = (int)time_diff % 60;
+	printf("Signal received; displaying (only) statistics gathered over the last %d minutes, %d seconds:\n\n", minutes, seconds);
 }

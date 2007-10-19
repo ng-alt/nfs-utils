@@ -70,7 +70,8 @@ am_gssd_OBJECTS = $(am__objects_1) gssd-gssd.$(OBJEXT) \
 	gssd-krb5_util.$(OBJEXT)
 gssd_OBJECTS = $(am_gssd_OBJECTS)
 am__DEPENDENCIES_1 =
-gssd_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+gssd_DEPENDENCIES = ../../support/nfs/libnfs.a $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1)
 gssd_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(gssd_CFLAGS) $(CFLAGS) $(gssd_LDFLAGS) \
 	$(LDFLAGS) -o $@
@@ -80,8 +81,8 @@ am__objects_2 = svcgssd-context.$(OBJEXT) \
 	svcgssd-context_lucid.$(OBJEXT) \
 	svcgssd-context_spkm3.$(OBJEXT) svcgssd-gss_util.$(OBJEXT) \
 	svcgssd-gss_oids.$(OBJEXT) svcgssd-err_util.$(OBJEXT)
-am_svcgssd_OBJECTS = $(am__objects_2) svcgssd-cacheio.$(OBJEXT) \
-	svcgssd-svcgssd.$(OBJEXT) svcgssd-svcgssd_main_loop.$(OBJEXT) \
+am_svcgssd_OBJECTS = $(am__objects_2) svcgssd-svcgssd.$(OBJEXT) \
+	svcgssd-svcgssd_main_loop.$(OBJEXT) \
 	svcgssd-svcgssd_mech2file.$(OBJEXT) \
 	svcgssd-svcgssd_proc.$(OBJEXT)
 svcgssd_OBJECTS = $(am_svcgssd_OBJECTS)
@@ -150,9 +151,9 @@ EXEEXT = @EXEEXT@
 F77 = @F77@
 FFLAGS = @FFLAGS@
 GREP = @GREP@
-GSSAPI_CFLAGS = @GSSAPI_CFLAGS@
-GSSAPI_LIBS = @GSSAPI_LIBS@
 GSSD = @GSSD@
+GSSGLUE_CFLAGS = @GSSGLUE_CFLAGS@
+GSSGLUE_LIBS = @GSSGLUE_LIBS@
 HAVE_LIBWRAP = @HAVE_LIBWRAP@
 HAVE_TCP_WRAPPER = @HAVE_TCP_WRAPPER@
 IDMAPD = @IDMAPD@
@@ -197,6 +198,7 @@ RELEASE = @RELEASE@
 RPCGEN_PATH = @RPCGEN_PATH@
 RPCSECGSS_CFLAGS = @RPCSECGSS_CFLAGS@
 RPCSECGSS_LIBS = @RPCSECGSS_LIBS@
+SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
@@ -296,20 +298,20 @@ gssd_SOURCES = \
 	krb5_util.h \
 	write_bytes.h
 
-gssd_LDADD = $(RPCSECGSS_LIBS) $(KRBLIBS)
+gssd_LDADD = ../../support/nfs/libnfs.a \
+		$(RPCSECGSS_LIBS) $(KRBLIBS)
+
 gssd_LDFLAGS = $(KRBLDFLAGS)
 gssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
 	      $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
 
 svcgssd_SOURCES = \
 	$(COMMON_SRCS) \
-	cacheio.c \
 	svcgssd.c \
 	svcgssd_main_loop.c \
 	svcgssd_mech2file.c \
 	svcgssd_proc.c \
 	\
-	cacheio.h \
 	svcgssd.h
 
 svcgssd_LDADD = \
@@ -435,7 +437,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-gssd_main_loop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-gssd_proc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-krb5_util.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-cacheio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-context.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-context_heimdal.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-context_lucid.Po@am__quote@
@@ -763,20 +764,6 @@ svcgssd-err_util.obj: err_util.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='err_util.c' object='svcgssd-err_util.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -c -o svcgssd-err_util.obj `if test -f 'err_util.c'; then $(CYGPATH_W) 'err_util.c'; else $(CYGPATH_W) '$(srcdir)/err_util.c'; fi`
-
-svcgssd-cacheio.o: cacheio.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -MT svcgssd-cacheio.o -MD -MP -MF $(DEPDIR)/svcgssd-cacheio.Tpo -c -o svcgssd-cacheio.o `test -f 'cacheio.c' || echo '$(srcdir)/'`cacheio.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/svcgssd-cacheio.Tpo $(DEPDIR)/svcgssd-cacheio.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='cacheio.c' object='svcgssd-cacheio.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -c -o svcgssd-cacheio.o `test -f 'cacheio.c' || echo '$(srcdir)/'`cacheio.c
-
-svcgssd-cacheio.obj: cacheio.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -MT svcgssd-cacheio.obj -MD -MP -MF $(DEPDIR)/svcgssd-cacheio.Tpo -c -o svcgssd-cacheio.obj `if test -f 'cacheio.c'; then $(CYGPATH_W) 'cacheio.c'; else $(CYGPATH_W) '$(srcdir)/cacheio.c'; fi`
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/svcgssd-cacheio.Tpo $(DEPDIR)/svcgssd-cacheio.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='cacheio.c' object='svcgssd-cacheio.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -c -o svcgssd-cacheio.obj `if test -f 'cacheio.c'; then $(CYGPATH_W) 'cacheio.c'; else $(CYGPATH_W) '$(srcdir)/cacheio.c'; fi`
 
 svcgssd-svcgssd.o: svcgssd.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -MT svcgssd-svcgssd.o -MD -MP -MF $(DEPDIR)/svcgssd-svcgssd.Tpo -c -o svcgssd-svcgssd.o `test -f 'svcgssd.c' || echo '$(srcdir)/'`svcgssd.c

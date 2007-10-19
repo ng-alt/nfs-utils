@@ -51,13 +51,21 @@
 #define	_PATH_PROC_EXPORTS_ALT	"/proc/fs/nfsd/exports"
 #endif
 
+/* Maximum number of security flavors on an export: */
+#define SECFLAVOR_COUNT 8
+
+struct sec_entry {
+	struct flav_info *flav;
+	int flags;
+};
+
 /*
  * Data related to a single exports entry as returned by getexportent.
  * FIXME: export options should probably be parsed at a later time to
  * allow overrides when using exportfs.
  */
 struct exportent {
-	char		e_hostname[NFSCLNT_IDMAX+1];
+	char *		e_hostname;
 	char		e_path[NFS_MAXPATHLEN+1];
 	/* The mount path may be different from the exported path due
 	   to submount. It may change for every mount. The idea is we
@@ -76,6 +84,7 @@ struct exportent {
 	int             e_fslocmethod;
 	char *          e_fslocdata;
 	char *		e_uuid;
+	struct sec_entry e_secinfo[SECFLAVOR_COUNT+1];
 };
 
 struct rmtabent {
@@ -89,6 +98,7 @@ struct rmtabent {
  */
 void			setexportent(char *fname, char *type);
 struct exportent *	getexportent(int,int);
+void 			secinfo_show(FILE *fp, struct exportent *ep);
 void			putexportent(struct exportent *xep);
 void			endexportent(void);
 struct exportent *	mkexportent(char *hname, char *path, char *opts);
@@ -134,6 +144,11 @@ int qword_get(char **bpp, char *dest, int bufsize);
 int qword_get_int(char **bpp, int *anint);
 void cache_flush(int force);
 int check_new_cache(void);
+void qword_add(char **bpp, int *lp, char *str);
+void qword_addhex(char **bpp, int *lp, char *buf, int blen);
+void qword_addint(char **bpp, int *lp, int n);
+void qword_adduint(char **bpp, int *lp, unsigned int n);
+void qword_addeol(char **bpp, int *lp);
 
 void closeall(int min);
 
