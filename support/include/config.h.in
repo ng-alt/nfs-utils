@@ -15,9 +15,6 @@
    this is either `int' or `gid_t'. */
 #undef GETGROUPS_T
 
-/* Define this if you want rpcsec_gss support compiled in */
-#undef GSS_SUPPORTED
-
 /* Define to 1 if you have the `alarm' function. */
 #undef HAVE_ALARM
 
@@ -146,6 +143,9 @@
 
 /* Define to 1 if you have the <libintl.h> header file. */
 #undef HAVE_LIBINTL_H
+
+/* Define to 1 if you have the `nfsidmap' library (-lnfsidmap). */
+#undef HAVE_LIBNFSIDMAP
 
 /* Define to 1 if you have the `tirpc' library (-ltirpc). */
 #undef HAVE_LIBTIRPC
@@ -352,21 +352,15 @@
 /* Define this if you want mount to read a configuration file */
 #undef MOUNT_CONFIG
 
-/* Define this if you want NFSv3 support compiled in */
-#undef NFS3_SUPPORTED
-
-/* Define this if you want NFSv41 support compiled in */
-#undef NFS41_SUPPORTED
-
-/* Define this if you want NFSv4 support compiled in */
-#undef NFS4_SUPPORTED
-
 /* This defines the location of the NFS state files. Warning: this must match
    definitions in config.mk! */
 #undef NFS_STATEDIR
 
 /* Define to 1 if your C compiler doesn't accept -c and -o together. */
 #undef NO_MINUS_C_MINUS_O
+
+/* Define this to the pathname where statd keeps its state file */
+#undef NSM_DEFAULT_STATEDIR
 
 /* Name of package */
 #undef PACKAGE
