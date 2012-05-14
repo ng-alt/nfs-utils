@@ -47,12 +47,8 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
 	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/librpcsecgss.m4 \
+	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
-	$(top_srcdir)/aclocal/libtool.m4 \
-	$(top_srcdir)/aclocal/ltoptions.m4 \
-	$(top_srcdir)/aclocal/ltsugar.m4 \
-	$(top_srcdir)/aclocal/ltversion.m4 \
-	$(top_srcdir)/aclocal/lt~obsolete.m4 \
 	$(top_srcdir)/aclocal/nfs-utils.m4 \
 	$(top_srcdir)/aclocal/rpcsec_vers.m4 \
 	$(top_srcdir)/aclocal/tcp-wrappers.m4 \
@@ -67,8 +63,10 @@ am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man8dir)"
 PROGRAMS = $(sbin_PROGRAMS)
 am_showmount_OBJECTS = showmount-showmount.$(OBJEXT)
 showmount_OBJECTS = $(am_showmount_OBJECTS)
+am__DEPENDENCIES_1 =
 showmount_DEPENDENCIES = ../../support/export/libexport.a \
-	../../support/nfs/libnfs.a ../../support/misc/libmisc.a
+	../../support/nfs/libnfs.a ../../support/misc/libmisc.a \
+	$(am__DEPENDENCIES_1)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)/support/include
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -138,6 +136,7 @@ CXXFLAGS_FOR_BUILD = @CXXFLAGS_FOR_BUILD@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -170,12 +169,17 @@ LIBBLKID = @LIBBLKID@
 LIBBSD = @LIBBSD@
 LIBCAP = @LIBCAP@
 LIBCRYPT = @LIBCRYPT@
+LIBDL = @LIBDL@
+LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
+LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBSOCKET = @LIBSOCKET@
+LIBSQLITE = @LIBSQLITE@
+LIBTIRPC = @LIBTIRPC@
 LIBTOOL = @LIBTOOL@
 LIBWRAP = @LIBWRAP@
 LIPO = @LIPO@
@@ -183,6 +187,7 @@ LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAINT = @MAINT@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -216,6 +221,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
@@ -280,7 +286,8 @@ EXTRA_DIST = $(man8_MANS)
 showmount_SOURCES = showmount.c
 showmount_LDADD = ../../support/export/libexport.a \
 		  ../../support/nfs/libnfs.a \
-	  	  ../../support/misc/libmisc.a
+		  ../../support/misc/libmisc.a \
+		  $(LIBTIRPC)
 
 showmount_CPPFLAGS = $(AM_CPPFLAGS) $(CPPFLAGS) \
 		   -I$(top_builddir)/support/export
