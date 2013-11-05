@@ -347,20 +347,26 @@ static char *next_mnt(void **v, char *p)
 
 static int is_subdirectory(char *child, char *parent)
 {
+	/* Check is child is strictly a subdirectory of
+	 * parent or a more distant descendant.
+	 */
 	size_t l = strlen(parent);
 
-	if (strcmp(parent, "/") == 0)
+	if (strcmp(parent, "/") == 0 && child[1] != 0)
 		return 1;
 
-	return strcmp(child, parent) == 0
-		|| (strncmp(child, parent, l) == 0 && child[l] == '/');
+	return (strncmp(child, parent, l) == 0 && child[l] == '/');
 }
 
 static int path_matches(nfs_export *exp, char *path)
 {
-	if (exp->m_export.e_flags & NFSEXP_CROSSMOUNT)
-		return is_subdirectory(path, exp->m_export.e_path);
-	return strcmp(path, exp->m_export.e_path) == 0;
+	/* Does the path match the export?  I.e. is it an
+	 * exact match, or does the export have CROSSMOUNT, and path
+	 * is a descendant?
+	 */
+	return strcmp(path, exp->m_export.e_path) == 0
+		|| ((exp->m_export.e_flags & NFSEXP_CROSSMOUNT)
+		    && is_subdirectory(path, exp->m_export.e_path));
 }
 
 static int
@@ -369,25 +375,23 @@ export_matches(nfs_export *exp, char *dom, char *path, struct addrinfo *ai)
 	return path_matches(exp, path) && client_matches(exp, dom, ai);
 }
 
-/* True iff e1 is a child of e2 and e2 has crossmnt set: */
+/* True iff e1 is a child of e2 (or descendant) and e2 has crossmnt set: */
 static bool subexport(struct exportent *e1, struct exportent *e2)
 {
 	char *p1 = e1->e_path, *p2 = e2->e_path;
-	size_t l2 = strlen(p2);
 
 	return e2->e_flags & NFSEXP_CROSSMOUNT
-		&& strncmp(p1, p2, l2) == 0
-		&& p1[l2] == '/';
+		&& is_subdirectory(p1, p2);
 }
 
 struct parsed_fsid {
 	int fsidtype;
 	/* We could use a union for this, but it would be more
 	 * complicated; why bother? */
-	unsigned int inode;
+	uint64_t inode;
 	unsigned int minor;
 	unsigned int major;
-	unsigned int fsidnum;
+	uint32_t fsidnum;
 	size_t uuidlen;
 	char *fhuuid;
 };
@@ -395,8 +399,8 @@ struct parsed_fsid {
 static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 		struct parsed_fsid *parsed)
 {
-	unsigned int dev;
-	unsigned long long inode64;
+	uint32_t dev;
+	uint32_t inode32;
 
 	memset(parsed, 0, sizeof(*parsed));
 	parsed->fsidtype = fsidtype;
@@ -405,7 +409,8 @@ static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 		if (fsidlen != 8)
 			return -1;
 		memcpy(&dev, fsid, 4);
-		memcpy(&parsed->inode, fsid+4, 4);
+		memcpy(&inode32, fsid+4, 4);
+		parsed->inode = inode32;
 		parsed->major = ntohl(dev)>>16;
 		parsed->minor = ntohl(dev) & 0xFFFF;
 		break;
@@ -416,7 +421,7 @@ static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 		memcpy(&parsed->fsidnum, fsid, 4);
 		break;
 
-	case FSID_MAJOR_MINOR: /* 12 bytes: 4 major, 4 minor, 4 inode 
+	case FSID_MAJOR_MINOR: /* 12 bytes: 4 major, 4 minor, 4 inode
 		 * This format is never actually used but was
 		 * an historical accident
 		 */
@@ -426,7 +431,8 @@ static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 		parsed->major = ntohl(dev);
 		memcpy(&dev, fsid+4, 4);
 		parsed->minor = ntohl(dev);
-		memcpy(&parsed->inode, fsid+8, 4);
+		memcpy(&inode32, fsid+8, 4);
+		parsed->inode = inode32;
 		break;
 
 	case FSID_ENCODE_DEV: /* 8 bytes: 4 byte packed device number, 4 inode */
@@ -436,7 +442,8 @@ static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 		if (fsidlen != 8)
 			return -1;
 		memcpy(&dev, fsid, 4);
-		memcpy(&parsed->inode, fsid+4, 4);
+		memcpy(&inode32, fsid+4, 4);
+		parsed->inode = inode32;
 		parsed->major = (dev & 0xfff00) >> 8;
 		parsed->minor = (dev & 0xff) | ((dev >> 12) & 0xfff00);
 		break;
@@ -444,7 +451,8 @@ static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 	case FSID_UUID4_INUM: /* 4 byte inode number and 4 byte uuid */
 		if (fsidlen != 8)
 			return -1;
-		memcpy(&parsed->inode, fsid, 4);
+		memcpy(&inode32, fsid, 4);
+		parsed->inode = inode32;
 		parsed->uuidlen = 4;
 		parsed->fhuuid = fsid+4;
 		break;
@@ -463,8 +471,7 @@ static int parse_fsid(int fsidtype, int fsidlen, char *fsid,
 	case FSID_UUID16_INUM: /* 8 byte inode number and 16 byte uuid */
 		if (fsidlen != 24)
 			return -1;
-		memcpy(&inode64, fsid, 8);
-		parsed->inode = inode64;
+		memcpy(&parsed->inode, fsid, 8);
 		parsed->uuidlen = 16;
 		parsed->fhuuid = fsid+8;
 		break;

@@ -67,7 +67,8 @@
 #include <errno.h>
 #include <gssapi/gssapi.h>
 #include <netdb.h>
-#include <ctype.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "gssd.h"
 #include "err_util.h"
@@ -176,7 +177,6 @@ get_servername(const char *name, const struct sockaddr *sa, const char *addr)
 	char			*hostname;
 	char			hbuf[NI_MAXHOST];
 	unsigned char		buf[sizeof(struct in6_addr)];
-	int			servername = 0;
 
 	if (avoid_dns) {
 		/*
@@ -184,15 +184,18 @@ get_servername(const char *name, const struct sockaddr *sa, const char *addr)
 		 * If it is an IP address, do the DNS lookup otherwise
 		 * skip the DNS lookup.
 		 */
-		servername = 0;
-		if (strchr(name, '.') && inet_pton(AF_INET, name, buf) == 1)
-			servername = 1; /* IPv4 */
-		else if (strchr(name, ':') && inet_pton(AF_INET6, name, buf) == 1)
-			servername = 1; /* or IPv6 */
+		int is_fqdn = 1;
+		if (strchr(name, '.') == NULL)
+			is_fqdn = 0; /* local name */
+		else if (inet_pton(AF_INET, name, buf) == 1)
+			is_fqdn = 0; /* IPv4 address */
+		else if (inet_pton(AF_INET6, name, buf) == 1)
+			is_fqdn = 0; /* IPv6 addrss */
 
-		if (servername) {
+		if (is_fqdn) {
 			return strdup(name);
 		}
+		/* Sorry, cannot avoid dns after all */
 	}
 
 	switch (sa->sa_family) {
@@ -466,8 +469,9 @@ process_clnt_dir(char *dir, char *pdir)
 	}
 	sprintf(clp->dirname, "%s/%s", pdir, dir);
 	if ((clp->dir_fd = open(clp->dirname, O_RDONLY)) == -1) {
-		printerr(0, "ERROR: can't open %s: %s\n",
-			 clp->dirname, strerror(errno));
+		if (errno != ENOENT)
+			printerr(0, "ERROR: can't open %s: %s\n",
+				 clp->dirname, strerror(errno));
 		goto fail_destroy_client;
 	}
 	fcntl(clp->dir_fd, F_SETSIG, DNOTIFY_SIGNAL);
@@ -523,7 +527,7 @@ update_old_clients(struct dirent **namelist, int size, char *pdir)
 		/* only compare entries in the global list that are from the
 		 * same pipefs parent directory as "pdir"
 		 */
-		if (strncmp(clp->dirname, pdir, strlen(pdir)) != 0) continue;
+		if (strcmp(clp->dirname, pdir) != 0) continue;
 
 		stillhere = 0;
 		for (i=0; i < size; i++) {
@@ -820,6 +824,7 @@ set_port:
  */
 static int
 create_auth_rpc_client(struct clnt_info *clp,
+		       char *tgtname,
 		       CLIENT **clnt_return,
 		       AUTH **auth_return,
 		       uid_t uid,
@@ -829,7 +834,6 @@ create_auth_rpc_client(struct clnt_info *clp,
 	CLIENT			*rpc_clnt = NULL;
 	struct rpc_gss_sec	sec;
 	AUTH			*auth = NULL;
-	uid_t			save_uid = -1;
 	int			retval = -1;
 	OM_uint32		min_stat;
 	char			rpc_errmsg[1024];
@@ -837,16 +841,6 @@ create_auth_rpc_client(struct clnt_info *clp,
 	struct timeval		timeout = {5, 0};
 	struct sockaddr		*addr = (struct sockaddr *) &clp->addr;
 	socklen_t		salen;
-
-	/* Create the context as the user (not as root) */
-	save_uid = geteuid();
-	if (setfsuid(uid) != 0) {
-		printerr(0, "WARNING: Failed to setfsuid for "
-			    "user with uid %d\n", uid);
-		goto out_fail;
-	}
-	printerr(2, "creating context using fsuid %d (save_uid %d)\n",
-			uid, save_uid);
 
 	sec.qop = GSS_C_QOP_DEFAULT;
 	sec.svc = RPCSEC_GSS_SVC_NONE;
@@ -924,14 +918,16 @@ create_auth_rpc_client(struct clnt_info *clp,
 			 clnt_spcreateerror(rpc_errmsg));
 		goto out_fail;
 	}
+	if (!tgtname)
+		tgtname = clp->servicename;
 
-	printerr(2, "creating context with server %s\n", clp->servicename);
-	auth = authgss_create_default(rpc_clnt, clp->servicename, &sec);
+	printerr(2, "creating context with server %s\n", tgtname);
+	auth = authgss_create_default(rpc_clnt, tgtname, &sec);
 	if (!auth) {
 		/* Our caller should print appropriate message */
 		printerr(2, "WARNING: Failed to create krb5 context for "
 			    "user with uid %d for server %s\n",
-			 uid, clp->servername);
+			 uid, tgtname);
 		goto out_fail;
 	}
 
@@ -944,11 +940,6 @@ create_auth_rpc_client(struct clnt_info *clp,
   out:
 	if (sec.cred != GSS_C_NO_CREDENTIAL)
 		gss_release_cred(&min_stat, &sec.cred);
-	/* Restore euid to original value */
-	if (((int)save_uid != -1) && (setfsuid(save_uid) != (int)uid)) {
-		printerr(0, "WARNING: Failed to restore fsuid"
-			    " to uid %d from %d\n", save_uid, uid);
-	}
 	return retval;
 
   out_fail:
@@ -956,6 +947,64 @@ create_auth_rpc_client(struct clnt_info *clp,
 	if (rpc_clnt) clnt_destroy(rpc_clnt);
 
 	goto out;
+}
+
+/*
+ * Create the context as the user (not as root).
+ *
+ * Note that we change the *real* uid here, as changing the effective uid is
+ * not sufficient. This is due to an unfortunate historical error in the MIT
+ * krb5 libs, where they used %{uid} in the default_ccache_name. Changing that
+ * now might break some applications so we're sort of stuck with it.
+ *
+ * Unfortunately, doing this leaves the forked child vulnerable to signals and
+ * renicing, but this is the best we can do. In the event that a child is
+ * signalled before downcalling, the kernel will just eventually time out the
+ * upcall attempt.
+ */
+static int
+change_identity(uid_t uid)
+{
+	struct passwd	*pw;
+
+	/* drop list of supplimentary groups first */
+	if (setgroups(0, NULL) != 0) {
+		printerr(0, "WARNING: unable to drop supplimentary groups!");
+		return errno;
+	}
+
+	/* try to get pwent for user */
+	pw = getpwuid(uid);
+	if (!pw) {
+		/* if that doesn't work, try to get one for "nobody" */
+		errno = 0;
+		pw = getpwnam("nobody");
+		if (!pw) {
+			printerr(0, "WARNING: unable to determine gid for uid %u\n", uid);
+			return errno ? errno : ENOENT;
+		}
+	}
+
+	/*
+	 * Switch the GIDs. Note that we leave the saved-set-gid alone in an
+	 * attempt to prevent attacks via ptrace()
+	 */
+	if (setresgid(pw->pw_gid, pw->pw_gid, -1) != 0) {
+		printerr(0, "WARNING: failed to set gid to %u!\n", pw->pw_gid);
+		return errno;
+	}
+
+	/*
+	 * Switch UIDs, but leave saved-set-uid alone to prevent ptrace() by
+	 * other processes running with this uid.
+	 */
+	if (setresuid(uid, uid, -1) != 0) {
+		printerr(0, "WARNING: Failed to setuid for user with uid %u\n",
+				uid);
+		return errno;
+	}
+
+	return 0;
 }
 
 /*
@@ -977,6 +1026,26 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 	int			err, downcall_err = -EACCES;
 	gss_cred_id_t		gss_cred;
 	OM_uint32		maj_stat, min_stat, lifetime_rec;
+	pid_t			pid;
+
+	pid = fork();
+	switch(pid) {
+	case 0:
+		/* Child: fall through to rest of function */
+		break;
+	case -1:
+		/* fork() failed! */
+		printerr(0, "WARNING: unable to fork() to handle upcall: %s\n",
+				strerror(errno));
+		return;
+	default:
+		/* Parent: just wait on child to exit and return */
+		wait(&err);
+		if (WIFSIGNALED(err))
+			printerr(0, "WARNING: forked child was killed with signal %d\n",
+					WTERMSIG(err));
+		return;
+	}
 
 	printerr(1, "handling krb5 upcall (%s)\n", clp->dirname);
 
@@ -1009,11 +1078,19 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 		 service ? service : "<null>");
 	if (uid != 0 || (uid == 0 && root_uses_machine_creds == 0 &&
 				service == NULL)) {
+
+		err = change_identity(uid);
+		if (err) {
+			printerr(0, "WARNING: failed to change identity: %s",
+				 strerror(err));
+			goto out_return_error;
+		}
+
 		/* Tell krb5 gss which credentials cache to use */
 		/* Try first to acquire credentials directly via GSSAPI */
 		err = gssd_acquire_user_cred(uid, &gss_cred);
 		if (!err)
-			create_resp = create_auth_rpc_client(clp, &rpc_clnt, &auth, uid,
+			create_resp = create_auth_rpc_client(clp, tgtname, &rpc_clnt, &auth, uid,
 							     AUTHTYPE_KRB5, gss_cred);
 		/* if create_auth_rplc_client fails try the traditional method of
 		 * trolling for credentials */
@@ -1022,7 +1099,7 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 			if (err == -EKEYEXPIRED)
 				downcall_err = -EKEYEXPIRED;
 			else if (!err)
-				create_resp = create_auth_rpc_client(clp, &rpc_clnt, &auth, uid,
+				create_resp = create_auth_rpc_client(clp, tgtname, &rpc_clnt, &auth, uid,
 							     AUTHTYPE_KRB5, GSS_C_NO_CREDENTIAL);
 		}
 	}
@@ -1033,8 +1110,7 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 			int success = 0;
 			do {
 				gssd_refresh_krb5_machine_credential(clp->servername,
-								     NULL, service,
-								     tgtname);
+								     NULL, service);
 				/*
 				 * Get a list of credential cache names and try each
 				 * of them until one works or we've tried them all
@@ -1047,7 +1123,7 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 				}
 				for (ccname = credlist; ccname && *ccname; ccname++) {
 					gssd_setup_krb5_machine_gss_ccache(*ccname);
-					if ((create_auth_rpc_client(clp, &rpc_clnt,
+					if ((create_auth_rpc_client(clp, tgtname, &rpc_clnt,
 								    &auth, uid,
 								    AUTHTYPE_KRB5,
 								    GSS_C_NO_CREDENTIAL)) == 0) {
@@ -1117,7 +1193,7 @@ out:
 		AUTH_DESTROY(auth);
 	if (rpc_clnt)
 		clnt_destroy(rpc_clnt);
-	return;
+	exit(0);
 
 out_return_error:
 	do_error_downcall(fd, uid, downcall_err);

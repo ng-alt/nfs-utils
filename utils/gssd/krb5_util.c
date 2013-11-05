@@ -231,7 +231,7 @@ gssd_find_existing_krb5_ccache(uid_t uid, char *dirname,
 				continue;
 			}
 			if (uid == 0 && !root_uses_machine_creds && 
-				strstr(namelist[i]->d_name, "_machine_")) {
+				strstr(namelist[i]->d_name, "machine_")) {
 				printerr(3, "CC '%s' not available to root\n",
 					 statname);
 				free(namelist[i]);
@@ -825,8 +825,10 @@ find_keytab_entry(krb5_context context, krb5_keytab kt, const char *tgtname,
 	myhostad[i+1] = 0;
 
 	retval = get_full_hostname(myhostname, myhostname, sizeof(myhostname));
-	if (retval)
-		goto out;
+	if (retval) {
+		/* Don't use myhostname */
+		myhostname[0] = 0;
+	}
 
 	code = krb5_get_default_realm(context, &default_realm);
 	if (code) {
@@ -852,11 +854,19 @@ find_keytab_entry(krb5_context context, krb5_keytab kt, const char *tgtname,
 	}
 
 	/*
-	 * Try the "appropriate" realm first, and if nothing found for that
-	 * realm, try the default realm (if it hasn't already been tried).
+	 * Make sure the preferred_realm, which may have been explicitly set
+	 * on the command line, is tried first. If nothing is found go on with
+	 * the host and local default realm (if that hasn't already been tried).
 	 */
 	i = 0;
 	realm = realmnames[i];
+
+	if (strcmp (realm, preferred_realm) != 0) {
+		realm = preferred_realm;
+		/* resetting the realmnames index */
+		i = -1;
+	}
+
 	while (1) {
 		if (realm == NULL) {
 			tried_all = 1;
@@ -883,6 +893,8 @@ find_keytab_entry(krb5_context context, krb5_keytab kt, const char *tgtname,
 								myhostad,
 								NULL);
 			} else {
+				if (!myhostname[0])
+					continue;
 				snprintf(spn, sizeof(spn), "%s/%s@%s",
 					 svcnames[j], myhostname, realm);
 				code = krb5_build_principal_ext(context, &princ,
@@ -1137,7 +1149,7 @@ gssd_get_krb5_machine_cred_list(char ***list)
 		if (ple->ccname) {
 			/* Make sure cred is up-to-date before returning it */
 			retval = gssd_refresh_krb5_machine_credential(NULL, ple,
-				NULL, NULL);
+				NULL);
 			if (retval)
 				continue;
 			if (i + 1 > listsize) {
@@ -1228,15 +1240,14 @@ gssd_destroy_krb5_machine_creds(void)
 int
 gssd_refresh_krb5_machine_credential(char *hostname,
 				     struct gssd_k5_kt_princ *ple, 
-					 char *service,
-					 char *tgtname)
+					 char *service)
 {
 	krb5_error_code code = 0;
 	krb5_context context;
 	krb5_keytab kt = NULL;;
 	int retval = 0;
 	char *k5err = NULL;
-	const char *svcnames[5] = { "$", "root", "nfs", "host", NULL };
+	const char *svcnames[] = { "$", "root", "nfs", "host", NULL };
 
 	/*
 	 * If a specific service name was specified, use it.
@@ -1268,10 +1279,7 @@ gssd_refresh_krb5_machine_credential(char *hostname,
 	if (ple == NULL) {
 		krb5_keytab_entry kte;
 
-		if (tgtname == NULL)
-			tgtname = hostname;
-
-		code = find_keytab_entry(context, kt, tgtname, &kte, svcnames);
+		code = find_keytab_entry(context, kt, hostname, &kte, svcnames);
 		if (code) {
 			printerr(0, "ERROR: %s: no usable keytab entry found "
 				 "in keytab %s for connection with host %s\n",
@@ -1396,6 +1404,13 @@ gssd_acquire_user_cred(uid_t uid, gss_cred_id_t *gss_cred)
 	}
 
 	ret = gssd_acquire_krb5_cred(name, gss_cred);
+
+	/* force validation of cred to check for expiry */
+	if (ret == 0) {
+		if (gss_inquire_cred(&min_stat, *gss_cred, NULL, NULL,
+				     NULL, NULL) != GSS_S_COMPLETE)
+			ret = -1;
+	}
 
 	maj_stat = gss_release_name(&min_stat, &name);
 	return ret;

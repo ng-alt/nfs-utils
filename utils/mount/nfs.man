@@ -84,6 +84,20 @@ in
 .SS "Options supported by all versions"
 These options are valid to use with any NFS version.
 .TP 1.5i
+.BI nfsvers= n
+The NFS protocol version number used to contact the server's NFS service.
+If the server does not support the requested version, the mount request 
+fails.
+If this option is not specified, the client negotiates a suitable version 
+with
+the server, trying version 4 first, version 3 second, and version 2 last.
+.TP 1.5i
+.BI vers= n
+This option is an alternative to the
+.B nfsvers
+option.
+It is included for compatibility with other operating systems
+.TP 1.5i
 .BR soft " / " hard
 Determines the recovery behavior of the NFS client
 after an NFS request times out.
@@ -366,9 +380,10 @@ If a value of zero is specified, the
 .BR mount (8)
 command exits immediately after the first failure.
 .TP 1.5i
-.BI sec= flavor
-The security flavor to use for accessing files on this mount point.
-If the server does not support this flavor, the mount operation fails.
+.BI sec= flavors
+A colon-separated list of one or more security flavors to use for accessing
+files on the mounted export. If the server does not support any of these
+flavors, the mount operation fails.
 If
 .B sec=
 is not specified, the client attempts to find
@@ -620,18 +635,6 @@ Using this option ensures that
 .BR pathconf (3)
 reports the proper maximum component length to applications
 in such cases.
-.TP 1.5i
-.BI nfsvers= n
-The NFS protocol version number used to contact the server's NFS service.
-If the server does not support the requested version, the mount request fails.
-If this option is not specified, the client negotiates a suitable version with
-the server, trying version 4 first, version 3 second, and version 2 last.
-.TP 1.5i
-.BI vers= n
-This option is an alternative to the
-.B nfsvers
-option.
-It is included for compatibility with other operating systems.
 .TP 1.5i
 .BR lock " / " nolock
 Selects whether to use the NLM sideband protocol to lock files on the server.
@@ -906,12 +909,20 @@ Here is an example from an /etc/fstab file for an NFS version 2 mount over UDP.
 	server:/export	/mnt	nfs	nfsvers=2,proto=udp	0 0
 .fi
 .P
-Try this example to mount using NFS version 4 over TCP
+This example shows how to mount using NFS version 4 over TCP
 with Kerberos 5 mutual authentication.
 .P
 .nf
 .ta 8n +16n +6n +6n +30n
 	server:/export	/mnt	nfs4	sec=krb5	0 0
+.fi
+.P
+This example shows how to mount using NFS version 4 over TCP
+with Kerberos 5 privacy or data integrity mode.
+.P
+.nf
+.ta 8n +16n +6n +6n +30n
+	server:/export	/mnt	nfs4	sec=krb5p:krb5i	0 0
 .fi
 .P
 This example can be used to mount /usr over NFS.

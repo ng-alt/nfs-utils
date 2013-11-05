@@ -58,17 +58,13 @@
 #define PMAP_TIMEOUT	(10)
 #define CONNECT_TIMEOUT	(20)
 #define MOUNT_TIMEOUT	(30)
+#define STATD_TIMEOUT	(10)
 
 #define SAFE_SOCKADDR(x)	(struct sockaddr *)(char *)(x)
 
 extern int nfs_mount_data_version;
 extern char *progname;
 extern int verbose;
-
-static const char *nfs_ns_pgmtbl[] = {
-	"status",
-	NULL,
-};
 
 static const char *nfs_mnt_pgmtbl[] = {
 	"mount",
@@ -761,18 +757,6 @@ int probe_bothports(clnt_addr_t *mnt_server, clnt_addr_t *nfs_server)
 					&nfs_server->pmap);
 }
 
-static int nfs_probe_statd(void)
-{
-	struct sockaddr_in addr = {
-		.sin_family		= AF_INET,
-		.sin_addr.s_addr	= htonl(INADDR_LOOPBACK),
-	};
-	rpcprog_t program = nfs_getrpcbyname(NSMPROG, nfs_ns_pgmtbl);
-
-	return nfs_getport_ping(SAFE_SOCKADDR(&addr), sizeof(addr),
-				program, (rpcvers_t)1, IPPROTO_UDP);
-}
-
 /**
  * start_statd - attempt to start rpc.statd
  *
@@ -790,6 +774,11 @@ int start_statd(void)
 #ifdef START_STATD
 	if (stat(START_STATD, &stb) == 0) {
 		if (S_ISREG(stb.st_mode) && (stb.st_mode & S_IXUSR)) {
+			int cnt = STATD_TIMEOUT * 10;
+			const struct timespec ts = {
+				.tv_sec = 0,
+				.tv_nsec = 100000000,
+			};
 			pid_t pid = fork();
 			switch (pid) {
 			case 0: /* child */
@@ -803,8 +792,13 @@ int start_statd(void)
 				waitpid(pid, NULL,0);
 				break;
 			}
-			if (nfs_probe_statd())
-				return 1;
+			while (1) {
+				if (nfs_probe_statd())
+					return 1;
+				if (! cnt--)
+					return 0;
+				nanosleep(&ts, NULL);
+			}
 		}
 	}
 #endif
