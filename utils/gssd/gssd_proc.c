@@ -256,6 +256,7 @@ read_service_info(char *info_file_name, char **servicename, char **servername,
 	if ((nbytes = read(fd, buf, INFOBUFLEN)) == -1)
 		goto fail;
 	close(fd);
+	fd = -1;
 	buf[nbytes] = '\0';
 
 	numfields = sscanf(buf,"RPC server: %127s\n"
@@ -322,6 +323,7 @@ destroy_client(struct clnt_info *clp)
 	if (clp->krb5_fd != -1) close(clp->krb5_fd);
 	if (clp->gssd_fd != -1) close(clp->gssd_fd);
 	free(clp->dirname);
+	free(clp->pdir);
 	free(clp->servicename);
 	free(clp->servername);
 	free(clp->protocol);
@@ -403,11 +405,10 @@ process_clnt_dir_files(struct clnt_info * clp)
 		return -1;
 	snprintf(info_file_name, sizeof(info_file_name), "%s/info",
 			clp->dirname);
-	if ((clp->servicename == NULL) &&
-	     read_service_info(info_file_name, &clp->servicename,
-				&clp->servername, &clp->prog, &clp->vers,
-				&clp->protocol, (struct sockaddr *) &clp->addr))
-		return -1;
+	if (clp->prog == 0)
+		read_service_info(info_file_name, &clp->servicename,
+				  &clp->servername, &clp->prog, &clp->vers,
+				  &clp->protocol, (struct sockaddr *) &clp->addr);
 	return 0;
 }
 
@@ -461,6 +462,9 @@ process_clnt_dir(char *dir, char *pdir)
 	struct clnt_info *	clp;
 
 	if (!(clp = insert_new_clnt()))
+		goto fail_destroy_client;
+
+	if (!(clp->pdir = strdup(pdir)))
 		goto fail_destroy_client;
 
 	/* An extra for the '/', and an extra for the null */
@@ -527,7 +531,7 @@ update_old_clients(struct dirent **namelist, int size, char *pdir)
 		/* only compare entries in the global list that are from the
 		 * same pipefs parent directory as "pdir"
 		 */
-		if (strcmp(clp->dirname, pdir) != 0) continue;
+		if (strcmp(clp->pdir, pdir) != 0) continue;
 
 		stillhere = 0;
 		for (i=0; i < size; i++) {
@@ -1040,7 +1044,10 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 		return;
 	default:
 		/* Parent: just wait on child to exit and return */
-		wait(&err);
+		do {
+			pid = wait(&err);
+		} while(pid == -1 && errno != -ECHILD);
+
 		if (WIFSIGNALED(err))
 			printerr(0, "WARNING: forked child was killed with signal %d\n",
 					WTERMSIG(err));
@@ -1088,7 +1095,7 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 
 		/* Tell krb5 gss which credentials cache to use */
 		/* Try first to acquire credentials directly via GSSAPI */
-		err = gssd_acquire_user_cred(uid, &gss_cred);
+		err = gssd_acquire_user_cred(&gss_cred);
 		if (!err)
 			create_resp = create_auth_rpc_client(clp, tgtname, &rpc_clnt, &auth, uid,
 							     AUTHTYPE_KRB5, gss_cred);
@@ -1320,11 +1327,14 @@ handle_gssd_upcall(struct clnt_info *clp)
 		}
 	}
 
-	if (strcmp(mech, "krb5") == 0)
+	if (strcmp(mech, "krb5") == 0 && clp->servername)
 		process_krb5_upcall(clp, uid, clp->gssd_fd, target, service);
-	else
-		printerr(0, "WARNING: handle_gssd_upcall: "
-			    "received unknown gss mech '%s'\n", mech);
+	else {
+		if (clp->servername)
+			printerr(0, "WARNING: handle_gssd_upcall: "
+				 "received unknown gss mech '%s'\n", mech);
+		do_error_downcall(clp->gssd_fd, uid, -EACCES);
+	}
 
 out:
 	free(lbuf);

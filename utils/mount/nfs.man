@@ -125,6 +125,10 @@ option may mitigate some of the risks of using the
 .B soft
 option.
 .TP 1.5i
+.BR intr " / " nointr
+This option is provided for backward compatibility.
+It is ignored after kernel 2.6.25.
+.TP 1.5i
 .BI timeo= n
 The time in deciseconds (tenths of a second) the NFS client waits for a
 response before it retries an NFS request.
@@ -288,6 +292,8 @@ attributes of a regular file before it requests
 fresh attribute information from a server.
 If this option is not specified, the NFS client uses
 a 3-second minimum.
+See the DATA AND METADATA COHERENCE section
+for a full discussion of attribute caching.
 .TP 1.5i
 .BI acregmax= n
 The maximum time (in seconds) that the NFS client caches
@@ -295,6 +301,8 @@ attributes of a regular file before it requests
 fresh attribute information from a server.
 If this option is not specified, the NFS client uses
 a 60-second maximum.
+See the DATA AND METADATA COHERENCE section
+for a full discussion of attribute caching.
 .TP 1.5i
 .BI acdirmin= n
 The minimum time (in seconds) that the NFS client caches
@@ -302,6 +310,8 @@ attributes of a directory before it requests
 fresh attribute information from a server.
 If this option is not specified, the NFS client uses
 a 30-second minimum.
+See the DATA AND METADATA COHERENCE section
+for a full discussion of attribute caching.
 .TP 1.5i
 .BI acdirmax= n
 The maximum time (in seconds) that the NFS client caches
@@ -309,6 +319,8 @@ attributes of a directory before it requests
 fresh attribute information from a server.
 If this option is not specified, the NFS client uses
 a 60-second maximum.
+See the DATA AND METADATA COHERENCE section
+for a full discussion of attribute caching.
 .TP 1.5i
 .BI actimeo= n
 Using
@@ -660,30 +672,6 @@ Using the
 option is also required when mounting exports on NFS servers
 that do not support the NLM protocol.
 .TP 1.5i
-.BR intr " / " nointr
-Selects whether to allow signals to interrupt file operations
-on this mount point. If neither option
-is specified (or if
-.B nointr
-is specified),
-signals do not interrupt NFS file operations. If
-.B intr
-is specified, system calls return EINTR if an in-progress NFS operation is interrupted by
-a signal.
-.IP
-Using the
-.B intr
-option is preferred to using the
-.B soft
-option because it is significantly less likely to result in data corruption.
-.IP
-The
-.BR intr " / " nointr
-mount option is deprecated after kernel 2.6.25.
-Only SIGKILL can interrupt a pending NFS operation on these kernels,
-and if specified, this mount option is ignored to provide backwards
-compatibility with older kernels.
-.TP 1.5i
 .BR cto " / " nocto
 Selects whether to use close-to-open cache coherence semantics.
 If neither option is specified (or if
@@ -799,29 +787,6 @@ The mount request fails if the server's rpcbind service is not available,
 the server's NFS service is not registered with its rpcbind service,
 or the server's NFS service is not available on the advertised port.
 .TP 1.5i
-.BR intr " / " nointr
-Selects whether to allow signals to interrupt file operations
-on this mount point. If neither option is specified (or if
-.B intr
-is specified), system calls return EINTR if an in-progress NFS operation
-is interrupted by a signal.  If
-.B nointr
-is specified, signals do not
-interrupt NFS operations.
-.IP
-Using the
-.B intr
-option is preferred to using the
-.B soft
-option because it is significantly less likely to result in data corruption.
-.IP
-The
-.BR intr " / " nointr
-mount option is deprecated after kernel 2.6.25.
-Only SIGKILL can interrupt a pending NFS operation on these kernels,
-and if specified, this mount option is ignored to provide backwards
-compatibility with older kernels.
-.TP 1.5i
 .BR cto " / " nocto
 Selects whether to use close-to-open cache coherence semantics
 for NFS directories on this mount point.
@@ -856,6 +821,26 @@ In the presence of multiple client network interfaces,
 special routing policies,
 or atypical network topologies,
 the exact address to use for callbacks may be nontrivial to determine.
+.TP 1.5i
+.BR migration " / " nomigration
+Selects whether the client uses an identification string that is compatible
+with NFSv4 Transparent State Migration (TSM).
+If the mounted server supports NFSv4 migration with TSM, specify the
+.B migration
+option.
+.IP
+Some server features misbehave in the face of a migration-compatible
+identification string.
+The
+.B nomigration
+option retains the use of a traditional client indentification string
+which is compatible with legacy NFS servers.
+This is also the behavior if neither option is specified.
+A client's open and lock state cannot be migrated transparently
+when it identifies itself via a traditional identification string.
+.IP
+This mount option has no effect with NFSv4 minor versions newer than zero,
+which always use TSM-compatible client identification strings.
 .SH nfs4 FILE SYSTEM TYPE
 The
 .BR nfs4
@@ -1161,24 +1146,33 @@ perfect cache coherence among their clients.
 Perfect cache coherence among disparate NFS clients
 is expensive to achieve, especially on wide area networks.
 As such, NFS settles for weaker cache coherence that
-satisfies the requirements of most file sharing types. Normally,
-file sharing is completely sequential:
-first client A opens a file, writes something to it, then closes it;
-then client B opens the same file, and reads the changes.
-.DT
+satisfies the requirements of most file sharing types.
 .SS "Close-to-open cache consistency"
-When an application opens a file stored on an NFS server,
-the NFS client checks that it still exists on the server
+Typically file sharing is completely sequential.
+First client A opens a file, writes something to it, then closes it.
+Then client B opens the same file, and reads the changes.
+.P
+When an application opens a file stored on an NFS version 3 server,
+the NFS client checks that the file exists on the server
 and is permitted to the opener by sending a GETATTR or ACCESS request.
+The NFS client sends these requests
+regardless of the freshness of the file's cached attributes.
+.P
 When the application closes the file,
 the NFS client writes back any pending changes
 to the file so that the next opener can view the changes.
 This also gives the NFS client an opportunity to report
-any server write errors to the application
-via the return code from
+write errors to the application via the return code from
 .BR close (2).
+.P
 The behavior of checking at open time and flushing at close time
-is referred to as close-to-open cache consistency.
+is referred to as
+.IR "close-to-open cache consistency" ,
+or
+.IR CTO .
+It can be disabled for an entire mount point using the
+.B nocto
+mount option.
 .SS "Weak cache consistency"
 There are still opportunities for a client's data cache
 to contain stale data.
@@ -1227,6 +1221,65 @@ If absolute cache coherence among clients is required,
 applications should use file locking. Alternatively, applications
 can also open their files with the O_DIRECT flag
 to disable data caching entirely.
+.SS "File timestamp maintainence"
+NFS servers are responsible for managing file and directory timestamps
+.RB ( atime ,
+.BR ctime ", and"
+.BR mtime ).
+When a file is accessed or updated on an NFS server,
+the file's timestamps are updated just like they would be on a filesystem
+local to an application.
+.P
+NFS clients cache file attributes, including timestamps.
+A file's timestamps are updated on NFS clients when its attributes
+are retrieved from the NFS server.
+Thus there may be some delay before timestamp updates
+on an NFS server appear to applications on NFS clients.
+.P
+To comply with the POSIX filesystem standard, the Linux NFS client
+relies on NFS servers to keep a file's
+.B mtime
+and
+.B ctime
+timestamps properly up to date.
+It does this by flushing local data changes to the server
+before reporting
+.B mtime
+to applications via system calls such as
+.BR stat (2).
+.P
+The Linux client handles
+.B atime
+updates more loosely, however.
+NFS clients maintain good performance by caching data,
+but that means that application reads, which normally update
+.BR atime ,
+are not reflected to the server where a file's
+.B atime
+is actually maintained.
+.P
+Because of this caching behavior,
+the Linux NFS client does not support generic atime-related mount options.
+See
+.BR mount (8)
+for details on these options.
+.P
+In particular, the
+.BR atime / noatime ,
+.BR diratime / nodiratime ,
+.BR relatime / norelatime ,
+and
+.BR strictatime / nostrictatime
+mount options have no effect on NFS mounts.
+.P
+.I /proc/mounts
+may report that the
+.B relatime
+mount option is set on NFS mounts, but in fact the
+.B atime
+semantics are always as described here, and are not like
+.B relatime
+semantics.
 .SS "Directory entry caching"
 The Linux NFS client caches the result of all NFS LOOKUP requests.
 If the requested directory entry exists on the server,

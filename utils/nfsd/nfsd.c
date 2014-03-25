@@ -45,6 +45,9 @@ static struct option longopts[] =
 	{ "port", 1, 0, 'p' },
 	{ "debug", 0, 0, 'd' },
 	{ "syslog", 0, 0, 's' },
+	{ "rdma", 2, 0, 'R' },
+	{ "grace-time", 1, 0, 'G'},
+	{ "lease-time", 1, 0, 'L'},
 	{ NULL, 0, 0, 0 }
 };
 
@@ -95,15 +98,19 @@ nfsd_enable_protos(unsigned int *proto4, unsigned int *proto6)
 int
 main(int argc, char **argv)
 {
-	int	count = NFSD_NPROC, c, error = 0, portnum = 0, fd, found_one;
-	char *p, *progname, *port;
-	char *haddr = NULL;
+	int	count = NFSD_NPROC, c, i, error = 0, portnum = 0, fd, found_one;
+	char *p, *progname, *port, *rdma_port = NULL;
+	char **haddr = NULL;
+	unsigned int hcounter = 0;
 	int	socket_up = 0;
-	int minorvers = NFS4_VERDEFAULT;	/* nfsv4 minor version */
+	unsigned int minorvers = 0;
+	unsigned int minorversset = 0;
 	unsigned int versbits = NFSCTL_VERDEFAULT;
 	unsigned int protobits = NFSCTL_ALLBITS;
 	unsigned int proto4 = 0;
 	unsigned int proto6 = 0;
+	int grace = -1;
+	int lease = -1;
 
 	progname = strdup(basename(argv[0]));
 	if (!progname) {
@@ -117,26 +124,37 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
+	haddr = malloc(sizeof(char *));
+	if (!haddr) {
+		fprintf(stderr, "%s: unable to allocate memory.\n", progname);
+		exit(1);
+	}
+	haddr[0] = NULL;
+
 	xlog_syslog(0);
 	xlog_stderr(1);
 
-	while ((c = getopt_long(argc, argv, "dH:hN:V:p:P:sTU", longopts, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "dH:hN:V:p:P:sTUrG:L:", longopts, NULL)) != EOF) {
 		switch(c) {
 		case 'd':
 			xlog_config(D_ALL, 1);
 			break;
 		case 'H':
-			/*
-			 * for now, this only handles one -H option. Use the
-			 * last one specified.
-			 */
-			free(haddr);
-			haddr = strdup(optarg);
-			if (!haddr) {
+			if (hcounter) {
+				haddr = realloc(haddr, sizeof(char*) * hcounter+1);
+				if(!haddr) {
+					fprintf(stderr, "%s: unable to allocate "
+							"memory.\n", progname);
+					exit(1);
+				}
+			}
+			haddr[hcounter] = strdup(optarg);
+			if (!haddr[hcounter]) {
 				fprintf(stderr, "%s: unable to allocate "
 					"memory.\n", progname);
 				exit(1);
 			}
+			hcounter++;
 			break;
 		case 'P':	/* XXX for nfs-server compatibility */
 		case 'p':
@@ -155,15 +173,26 @@ main(int argc, char **argv)
 				exit(1);
 			}
 			break;
+		case 'r':
+			rdma_port = "nfsrdma";
+			break;
+		case 'R': /* --rdma */
+			if (optarg)
+				rdma_port = optarg;
+			else
+				rdma_port = "nfsrdma";
+			break;
+
 		case 'N':
 			switch((c = strtol(optarg, &p, 0))) {
 			case 4:
 				if (*p == '.') {
 					int i = atoi(p+1);
-					if (i > 2) {
+					if (i > NFS4_MAXMINOR) {
 						fprintf(stderr, "%s: unsupported minor version\n", optarg);
 						exit(1);
 					}
+					NFSCTL_VERSET(minorversset, i);
 					NFSCTL_VERUNSET(minorvers, i);
 					break;
 				}
@@ -181,10 +210,11 @@ main(int argc, char **argv)
 			case 4:
 				if (*p == '.') {
 					int i = atoi(p+1);
-					if (i > 2) {
+					if (i > NFS4_MAXMINOR) {
 						fprintf(stderr, "%s: unsupported minor version\n", optarg);
 						exit(1);
 					}
+					NFSCTL_VERSET(minorversset, i);
 					NFSCTL_VERSET(minorvers, i);
 					break;
 				}
@@ -206,6 +236,20 @@ main(int argc, char **argv)
 			break;
 		case 'U':
 			NFSCTL_UDPUNSET(protobits);
+			break;
+		case 'G':
+			grace = strtol(optarg, &p, 0);
+			if (*p || grace <= 0) {
+				fprintf(stderr, "%s: Unrecognized grace time.\n", optarg);
+				exit(1);
+			}
+			break;
+		case 'L':
+			lease = strtol(optarg, &p, 0);
+			if (*p || lease <= 0) {
+				fprintf(stderr, "%s: Unrecognized lease time.\n", optarg);
+				exit(1);
+			}
 			break;
 		default:
 			fprintf(stderr, "Invalid argument: '%c'\n", c);
@@ -254,7 +298,7 @@ main(int argc, char **argv)
 	if (!found_one) {
 		xlog(L_ERROR, "no version specified");
 		exit(1);
-	}			
+	}
 
 	if (NFSCTL_VERISSET(versbits, 4) &&
 	    !NFSCTL_TCPISSET(proto4) &&
@@ -278,22 +322,35 @@ main(int argc, char **argv)
 	}
 
 	/*
-	 * must set versions before the fd's so that the right versions get
+	 * Must set versions before the fd's so that the right versions get
 	 * registered with rpcbind. Note that on older kernels w/o the right
 	 * interfaces, these are a no-op.
+	 * Timeouts must also be set before ports are created else we get
+	 * EBUSY.
 	 */
-	nfssvc_setvers(versbits, minorvers);
- 
-	error = nfssvc_set_sockets(AF_INET, proto4, haddr, port);
-	if (!error)
-		socket_up = 1;
+	nfssvc_setvers(versbits, minorvers, minorversset);
+	if (grace > 0)
+		nfssvc_set_time("grace", grace);
+	if (lease  > 0)
+		nfssvc_set_time("lease", lease);
 
+	i = 0;
+	do {
+		error = nfssvc_set_sockets(AF_INET, proto4, haddr[i], port);
+		if (!error)
+			socket_up = 1;
 #ifdef IPV6_SUPPORTED
-	error = nfssvc_set_sockets(AF_INET6, proto6, haddr, port);
-	if (!error)
-		socket_up = 1;
+		error = nfssvc_set_sockets(AF_INET6, proto6, haddr[i], port);
+		if (!error)
+			socket_up = 1;
 #endif /* IPV6_SUPPORTED */
+	} while (++i < hcounter); 
 
+	if (rdma_port) {
+		error = nfssvc_set_rdmaport(rdma_port);
+		if (!error)
+			socket_up = 1;
+	}
 set_threads:
 	/* don't start any threads if unable to hand off any sockets */
 	if (!socket_up) {
@@ -325,6 +382,8 @@ set_threads:
 		xlog(L_ERROR, "error starting threads: errno %d (%m)", errno);
 out:
 	free(port);
+	for(i=0; i < hcounter; i++)
+		free(haddr[i]);
 	free(haddr);
 	free(progname);
 	return (error != 0);
@@ -334,7 +393,10 @@ static void
 usage(const char *prog)
 {
 	fprintf(stderr, "Usage:\n"
-		"%s [-d|--debug] [-H hostname] [-p|-P|--port port] [-N|--no-nfs-version version] [-V|--nfs-version version] [-s|--syslog] [-T|--no-tcp] [-U|--no-udp] nrservs\n", 
+		"%s [-d|--debug] [-H hostname] [-p|-P|--port port]\n"
+		"     [-N|--no-nfs-version version] [-V|--nfs-version version]\n"
+		"     [-s|--syslog] [-T|--no-tcp] [-U|--no-udp] [-r|--rdma=]\n"
+		"     [-G|--grace-time secs] [-L|--leasetime secs] nrservs\n",
 		prog);
 	exit(2);
 }

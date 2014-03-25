@@ -93,7 +93,7 @@ void print_one(char *spec, char *node, char *type, char *opts)
 
 void mount_usage(void)
 {
-	printf(_("usage: %s remotetarget dir [-rvVwfnsih] [-o nfsoptions]\n"),
+	printf(_("usage: %s remotetarget dir [-rvVwfnsh] [-o nfsoptions]\n"),
 		progname);
 	printf(_("options:\n"));
 	printf(_("\t-r\t\tMount file system readonly\n"));
@@ -130,7 +130,7 @@ int chk_mountpoint(const char *mount_point)
 		mount_error(NULL, mount_point, ENOTDIR);
 		return 1;
 	}
-	if (access(mount_point, X_OK) < 0) {
+	if (getuid() != 0 && geteuid() != 0 && access(mount_point, X_OK) < 0) {
 		mount_error(NULL, mount_point, errno);
 		return 1;
 	}

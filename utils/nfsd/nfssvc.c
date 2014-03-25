@@ -268,8 +268,67 @@ nfssvc_set_sockets(const int family, const unsigned int protobits,
 	return nfssvc_setfds(&hints, host, port);
 }
 
+int
+nfssvc_set_rdmaport(const char *port)
+{
+	struct servent *sv = getservbyname(port, "tcp");
+	int nport;
+	char buf[20];
+	int ret;
+	int fd;
+
+	if (sv)
+		nport = sv->s_port;
+	else {
+		char *ep;
+		nport = strtol(port, &ep, 10);
+		if (!*port || *ep) {
+			xlog(L_ERROR, "unable to interpret port name %s",
+			     port);
+			return 1;
+		}
+	}
+
+	fd = open(NFSD_PORTS_FILE, O_WRONLY);
+	if (fd < 0)
+		return 1;
+	snprintf(buf, sizeof(buf), "rdma %d", nport);
+	ret = 0;
+	if (write(fd, buf, strlen(buf)) != (ssize_t)strlen(buf)) {
+		ret= errno;
+		xlog(L_ERROR, "Unable to request RDMA services: %m");
+	}
+	close(fd);
+	return ret;
+}
+
 void
-nfssvc_setvers(unsigned int ctlbits, int minorvers)
+nfssvc_set_time(const char *type, const int seconds)
+{
+	char pathbuf[40];
+	char nbuf[10];
+	int fd;
+
+	snprintf(pathbuf, sizeof(pathbuf), NFSD_FS_DIR "/nfsv4%stime", type);
+	snprintf(nbuf, sizeof(nbuf), "%d", seconds);
+	fd = open(pathbuf, O_WRONLY);
+	if (fd >= 0) {
+		if (write(fd, nbuf, strlen(nbuf)) != (ssize_t)strlen(nbuf))
+			xlog(L_ERROR, "Unable to set nfsv4%stime: %m", type);
+		close(fd);
+	}
+	if (strcmp(type, "grace") == 0) {
+		/* set same value for lockd */
+		fd = open("/proc/sys/fs/nfs/nlm_grace_period", O_WRONLY);
+		if (fd >= 0) {
+			write(fd, nbuf, strlen(nbuf));
+			close(fd);
+		}
+	}
+}
+
+void
+nfssvc_setvers(unsigned int ctlbits, unsigned int minorvers, unsigned int minorversset)
 {
 	int fd, n, off;
 	char *ptr;
@@ -281,10 +340,12 @@ nfssvc_setvers(unsigned int ctlbits, int minorvers)
 		return;
 
 	for (n = NFS4_MINMINOR; n <= NFS4_MAXMINOR; n++) {
-		if (NFSCTL_VERISSET(minorvers, n)) 
-			off += snprintf(ptr+off, sizeof(buf) - off, "+4.%d ", n);
-		else			
-			off += snprintf(ptr+off, sizeof(buf) - off, "-4.%d ", n);
+		if (NFSCTL_VERISSET(minorversset, n)) {
+			if (NFSCTL_VERISSET(minorvers, n))
+				off += snprintf(ptr+off, sizeof(buf) - off, "+4.%d ", n);
+			else
+				off += snprintf(ptr+off, sizeof(buf) - off, "-4.%d ", n);
+		}
 	}
 	for (n = NFSD_MINVERS; n <= NFSD_MAXVERS; n++) {
 		if (NFSCTL_VERISSET(ctlbits, n))

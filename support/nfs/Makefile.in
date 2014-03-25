@@ -113,12 +113,12 @@ libnfs_a_AR = $(AR) $(ARFLAGS)
 libnfs_a_LIBADD =
 am_libnfs_a_OBJECTS = exports.$(OBJEXT) rmtab.$(OBJEXT) xio.$(OBJEXT) \
 	rpcmisc.$(OBJEXT) rpcdispatch.$(OBJEXT) xlog.$(OBJEXT) \
-	xcommon.$(OBJEXT) wildmat.$(OBJEXT) nfsclient.$(OBJEXT) \
-	nfsexport.$(OBJEXT) getfh.$(OBJEXT) nfsctl.$(OBJEXT) \
-	rpc_socket.$(OBJEXT) getport.$(OBJEXT) svc_socket.$(OBJEXT) \
-	cacheio.$(OBJEXT) closeall.$(OBJEXT) nfs_mntent.$(OBJEXT) \
-	conffile.$(OBJEXT) svc_create.$(OBJEXT) atomicio.$(OBJEXT) \
-	strlcpy.$(OBJEXT) strlcat.$(OBJEXT)
+	xcommon.$(OBJEXT) wildmat.$(OBJEXT) mydaemon.$(OBJEXT) \
+	nfsclient.$(OBJEXT) nfsexport.$(OBJEXT) getfh.$(OBJEXT) \
+	nfsctl.$(OBJEXT) rpc_socket.$(OBJEXT) getport.$(OBJEXT) \
+	svc_socket.$(OBJEXT) cacheio.$(OBJEXT) closeall.$(OBJEXT) \
+	nfs_mntent.$(OBJEXT) conffile.$(OBJEXT) svc_create.$(OBJEXT) \
+	atomicio.$(OBJEXT) strlcpy.$(OBJEXT) strlcat.$(OBJEXT)
 libnfs_a_OBJECTS = $(am_libnfs_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -364,7 +364,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 noinst_LIBRARIES = libnfs.a
 libnfs_a_SOURCES = exports.c rmtab.c xio.c rpcmisc.c rpcdispatch.c \
-		   xlog.c xcommon.c wildmat.c nfsclient.c \
+		   xlog.c xcommon.c wildmat.c mydaemon.c nfsclient.c \
 		   nfsexport.c getfh.c nfsctl.c rpc_socket.c getport.c \
 		   svc_socket.c cacheio.c closeall.c nfs_mntent.c conffile.c \
 		   svc_create.c atomicio.c strlcpy.c strlcat.c
@@ -426,6 +426,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/exports.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/getfh.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/getport.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mydaemon.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfs_mntent.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsclient.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsctl.Po@am__quote@

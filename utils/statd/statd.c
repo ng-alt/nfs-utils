@@ -60,6 +60,8 @@ static struct option longopts[] =
 	{ "notify-mode", 0, 0, 'N' },
 	{ "ha-callout", 1, 0, 'H' },
 	{ "no-notify", 0, 0, 'L' },
+	{ "nlm-port", 1, 0, 'T'},
+	{ "nlm-udp-port", 1, 0, 'U'},
 	{ NULL, 0, 0, 0 }
 };
 
@@ -209,7 +211,32 @@ static void run_sm_notify(int outport)
 	exit(2);
 
 }
-/* 
+
+static void set_nlm_port(char *type, int port)
+{
+	char nbuf[20];
+	char pathbuf[40];
+	int fd;
+	if (!port)
+		return;
+	snprintf(nbuf, sizeof(nbuf), "%d", port);
+	snprintf(pathbuf, sizeof(pathbuf), "/proc/sys/fs/nfs/nlm_%sport", type);
+	fd = open(pathbuf, O_WRONLY);
+	if (fd < 0 && errno == ENOENT) {
+		/* probably module not loaded */
+		system("modprobe lockd");
+		fd = open(pathbuf, O_WRONLY);
+	}
+	if (fd >= 0) {
+		if (write(fd, nbuf, strlen(nbuf)) != (ssize_t)strlen(nbuf))
+			fprintf(stderr, "%s: fail to set NLM %s port: %m\n",
+				name_p, type);
+		close(fd);
+	} else
+		fprintf(stderr, "%s: failed to open %s: %m\n", name_p, pathbuf);
+}
+
+/*
  * Entry routine/main loop.
  */
 int main (int argc, char **argv)
@@ -218,6 +245,7 @@ int main (int argc, char **argv)
 	int pid;
 	int arg;
 	int port = 0, out_port = 0;
+	int nlm_udp = 0, nlm_tcp = 0;
 	struct rlimit rlim;
 
 	int pipefds[2] = { -1, -1};
@@ -238,14 +266,8 @@ int main (int argc, char **argv)
 	/* Set hostname */
 	MY_NAME = NULL;
 
-	/* Refuse to start if another statd is running */
-	if (nfs_probe_statd()) {
-		fprintf(stderr, "Statd service already running!\n");
-		exit(1);
-	}
-
 	/* Process command line switches */
-	while ((arg = getopt_long(argc, argv, "h?vVFNH:dn:p:o:P:L", longopts, NULL)) != EOF) {
+	while ((arg = getopt_long(argc, argv, "h?vVFNH:dn:p:o:P:LT:U:", longopts, NULL)) != EOF) {
 		switch (arg) {
 		case 'V':	/* Version */
 		case 'v':
@@ -281,6 +303,26 @@ int main (int argc, char **argv)
 				exit(1);
 			}
 			break;
+		case 'T': /* NLM TCP and UDP port */
+			nlm_tcp = atoi(optarg);
+			if (nlm_tcp < 1 || nlm_tcp > 65535) {
+				fprintf(stderr, "%s: bad nlm port number: %s\n",
+					argv[0], optarg);
+				usage();
+				exit(1);
+			}
+			if (nlm_udp == 0)
+				nlm_udp = nlm_tcp;
+			break;
+		case 'U': /* NLM  UDP port */
+			nlm_udp = atoi(optarg);
+			if (nlm_udp < 1 || nlm_udp > 65535) {
+				fprintf(stderr, "%s: bad nlm UDP port number: %s\n",
+					argv[0], optarg);
+				usage();
+				exit(1);
+			}
+			break;
 		case 'n':	/* Specify local hostname */
 			run_mode |= STATIC_HOSTNAME;
 			MY_NAME = xstrdup(optarg);
@@ -304,6 +346,12 @@ int main (int argc, char **argv)
 			usage();
 			exit(-1);
 		}
+	}
+
+	/* Refuse to start if another statd is running */
+	if (nfs_probe_statd()) {
+		fprintf(stderr, "Statd service already running!\n");
+		exit(1);
 	}
 
 	if (port == out_port && port != 0) {
@@ -337,12 +385,15 @@ int main (int argc, char **argv)
 		}
 	}
 
+	set_nlm_port("tcp", nlm_tcp);
+	set_nlm_port("udp", nlm_udp);
+
 #ifdef SIMULATIONS
 	if (argc > 1)
 		/* LH - I _really_ need to update simulator... */
 		simulator (--argc, ++argv);	/* simulator() does exit() */
 #endif
-	
+
 	if (!(run_mode & MODE_NODAEMON)) {
 		int tempfd;
 

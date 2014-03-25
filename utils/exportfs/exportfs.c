@@ -27,6 +27,10 @@
 #include <netdb.h>
 #include <errno.h>
 #include <dirent.h>
+#include <limits.h>
+#include <time.h>
+
+#define INT_TO_LONG_THRESHOLD_SECS (INT_MAX - (60 * 60 * 24))
 
 #include "sockaddr.h"
 #include "misc.h"
@@ -61,19 +65,19 @@ static int _lockfd = -1;
  *	writes A+B		writes A+C
  *
  * The locking in support/export/xtab.c will prevent mountd from
- * seeing a partially written version of etab, and will prevent 
+ * seeing a partially written version of etab, and will prevent
  * the two writers above from writing simultaneously and
  * corrupting etab, but to prevent problems like the above we
  * need these additional lockfile() routines.
  */
-static void 
+static void
 grab_lockfile()
 {
 	_lockfd = open(lockfile, O_CREAT|O_RDWR, 0666);
-	if (_lockfd != -1) 
+	if (_lockfd != -1)
 		lockf(_lockfd, F_LOCK, 0);
 }
-static void 
+static void
 release_lockfile()
 {
 	if (_lockfd != -1)
@@ -267,7 +271,7 @@ exports_update(int verbose)
 		exports_update_one(exp, verbose);
 	}
 }
-			
+
 /*
  * export_all finds all entries and
  *    marks them xtabent and mayexport so that they get exported
@@ -282,7 +286,7 @@ export_all(int verbose)
 		for (exp = exportlist[i].p_head; exp; exp = exp->m_next) {
 			if (verbose)
 				printf("exporting %s:%s\n",
-				       exp->m_client->m_hostname, 
+				       exp->m_client->m_hostname,
 				       exp->m_export.e_path);
 			exp->m_xtabent = 1;
 			exp->m_mayexport = 1;
@@ -295,22 +299,12 @@ export_all(int verbose)
 
 
 static void
-exportfs(char *arg, char *options, int verbose)
+exportfs_parsed(char *hname, char *path, char *options, int verbose)
 {
 	struct exportent *eep;
 	nfs_export	*exp = NULL;
 	struct addrinfo	*ai = NULL;
-	char		*path;
-	char		*hname = arg;
 	int		htype;
-
-	if ((path = strchr(arg, ':')) != NULL)
-		*path++ = '\0';
-
-	if (!path || *path != '/') {
-		xlog(L_ERROR, "Invalid exporting option: %s", arg);
-		return;
-	}
 
 	if ((htype = client_gettype(hname)) == MCL_FQDN) {
 		ai = host_addrinfo(hname);
@@ -329,7 +323,7 @@ exportfs(char *arg, char *options, int verbose)
 		goto out;
 
 	if (verbose)
-		printf("exporting %s:%s\n", exp->m_client->m_hostname, 
+		printf("exporting %s:%s\n", exp->m_client->m_hostname,
 			exp->m_export.e_path);
 	exp->m_xtabent = 1;
 	exp->m_mayexport = 1;
@@ -341,23 +335,67 @@ out:
 	freeaddrinfo(ai);
 }
 
-static void
-unexportfs(char *arg, int verbose)
+static int exportfs_generic(char *arg, char *options, int verbose)
 {
-	nfs_export	*exp;
-	struct addrinfo *ai = NULL;
-	char		*path;
-	char		*hname = arg;
-	int		htype;
-	int		success = 0;
+	char *path;
 
 	if ((path = strchr(arg, ':')) != NULL)
 		*path++ = '\0';
 
-	if (!path || *path != '/') {
-		xlog(L_ERROR, "Invalid unexporting option: %s", arg);
-		return;
-	}
+	if (!path || *path != '/')
+		return 1;
+
+	exportfs_parsed(arg, path, options, verbose);
+	return 0;
+}
+
+static int exportfs_ipv6(char *arg, char *options, int verbose)
+{
+	char *path, *c, hname[NI_MAXHOST + strlen("/128")];
+
+	arg++;
+	c = strchr(arg, ']');
+	if (c == NULL)
+		return 1;
+	strncpy(hname, arg, c - arg);
+
+	/* no colon means this is a wildcarded DNS hostname */
+	if (strchr(hname, ':') == NULL)
+		return exportfs_generic(--arg, options, verbose);
+
+	path = strstr(c, ":/");
+	if (path == NULL)
+		return 1;
+	*path++ = '\0';
+
+	/* if there's anything between the closing brace and the
+	 * path separator, it's probably a prefix length */
+	strcat(hname, ++c);
+
+	exportfs_parsed(hname, path, options, verbose);
+	return 0;
+}
+
+static void
+exportfs(char *arg, char *options, int verbose)
+{
+	int failed;
+
+	if (*arg == '[')
+		failed = exportfs_ipv6(arg, options, verbose);
+	else
+		failed = exportfs_generic(arg, options, verbose);
+	if (failed)
+		xlog(L_ERROR, "Invalid export syntax: %s", arg);
+}
+
+static void
+unexportfs_parsed(char *hname, char *path, int verbose)
+{
+	nfs_export	*exp;
+	struct addrinfo *ai = NULL;
+	int		htype;
+	int		success = 0;
 
 	if ((htype = client_gettype(hname)) == MCL_FQDN) {
 		ai = host_addrinfo(hname);
@@ -387,7 +425,7 @@ unexportfs(char *arg, int verbose)
 			else
 #endif
 				printf("unexporting %s:%s\n",
-					exp->m_client->m_hostname, 
+					exp->m_client->m_hostname,
 					exp->m_export.e_path);
 		}
 #if 0
@@ -398,25 +436,95 @@ unexportfs(char *arg, int verbose)
 		exp->m_mayexport = 0;
 		success = 1;
 	}
-	if (!success) 
-		xlog(L_ERROR, "Could not find '%s:%s' to unexport.", arg, path);
+	if (!success)
+		xlog(L_ERROR, "Could not find '%s:%s' to unexport.", hname, path);
 
 	freeaddrinfo(ai);
 }
 
+static int unexportfs_generic(char *arg, int verbose)
+{
+	char *path;
+
+	if ((path = strchr(arg, ':')) != NULL)
+		*path++ = '\0';
+
+	if (!path || *path != '/')
+		return 1;
+
+	unexportfs_parsed(arg, path, verbose);
+	return 0;
+}
+
+static int unexportfs_ipv6(char *arg, int verbose)
+{
+	char *path, *c, hname[NI_MAXHOST + strlen("/128")];
+
+	arg++;
+	c = strchr(arg, ']');
+	if (c == NULL)
+		return 1;
+	strncpy(hname, arg, c - arg);
+
+	/* no colon means this is a wildcarded DNS hostname */
+	if (strchr(hname, ':') == NULL)
+		return unexportfs_generic(--arg, verbose);
+
+	path = strstr(c, ":/");
+	if (path == NULL)
+		return 1;
+	*path++ = '\0';
+
+	/* if there's anything between the closing brace and the
+	 * path separator, it's probably a prefix length */
+	strcat(hname, ++c);
+
+	unexportfs_parsed(hname, path, verbose);
+	return 0;
+}
+
+static void
+unexportfs(char *arg, int verbose)
+{
+	int failed;
+
+	if (*arg == '[')
+		failed = unexportfs_ipv6(arg, verbose);
+	else
+		failed = unexportfs_generic(arg, verbose);
+	if (failed)
+		xlog(L_ERROR, "Invalid export syntax: %s", arg);
+}
+
 static int can_test(void)
 {
+	char buf[1024];
 	int fd;
 	int n;
-	char *setup = "nfsd 0.0.0.0 2147483647 -test-client-\n";
+
 	fd = open("/proc/net/rpc/auth.unix.ip/channel", O_WRONLY);
-	if ( fd < 0) return 0;
-	n = write(fd, setup, strlen(setup));
+	if (fd < 0)
+		return 0;
+
+	/*
+	 * We introduce tolerance of 1 day to ensure that we use a
+	 * LONG_MAX for the expiry timestamp before it is actually
+	 * needed. To use LONG_MAX, the kernel code must have
+	 * commit 2f74f972  (sunrpc: prepare NFS for 2038).
+	 */
+	if (time(NULL) > INT_TO_LONG_THRESHOLD_SECS)
+		sprintf(buf, "nfsd 0.0.0.0 %ld -test-client-\n", LONG_MAX);
+	else
+		sprintf(buf, "nfsd 0.0.0.0 %d -test-client-\n", INT_MAX);
+
+	n = write(fd, buf, strlen(buf));
 	close(fd);
 	if (n < 0)
 		return 0;
+
 	fd = open("/proc/net/rpc/nfsd.export/channel", O_WRONLY);
-	if ( fd < 0) return 0;
+	if (fd < 0)
+		return 0;
 	close(fd);
 	return 1;
 }
@@ -424,11 +532,17 @@ static int can_test(void)
 static int test_export(char *path, int with_fsid)
 {
 	char buf[1024];
+	char *bp = buf;
+	int len = sizeof(buf);
 	int fd, n;
 
-	sprintf(buf, "-test-client- %s 3 %d 65534 65534 0\n",
-		path,
-		with_fsid ? NFSEXP_FSID : 0);
+	n = snprintf(buf, len, "-test-client- ");
+	bp += n;
+	len -= n;
+	qword_add(&bp, &len, path);
+	if (len < 1)
+		return 0;
+	snprintf(bp, len, " 3 %d 65534 65534 0\n", with_fsid ? NFSEXP_FSID : 0);
 	fd = open("/proc/net/rpc/nfsd.export/channel", O_WRONLY);
 	if (fd < 0)
 		return 0;
@@ -596,7 +710,7 @@ export_d_read(const char *dname)
 		int fname_len;
 
 
-		if (d->d_type != DT_UNKNOWN 
+		if (d->d_type != DT_UNKNOWN
 		    && d->d_type != DT_REG
 		    && d->d_type != DT_LNK)
 			continue;
@@ -605,7 +719,7 @@ export_d_read(const char *dname)
 
 #define _EXT_EXPORT_SIZ   (sizeof(_EXT_EXPORT) - 1)
 		namesz = strlen(d->d_name);
-		if (!namesz 
+		if (!namesz
 		    || namesz < _EXT_EXPORT_SIZ + 1
 		    || strcmp(d->d_name + (namesz - _EXT_EXPORT_SIZ),
 			      _EXT_EXPORT))
@@ -619,7 +733,7 @@ export_d_read(const char *dname)
 
 		export_read(fname);
 	}
-		
+
 	for (i = 0; i < n; i++)
 		free(namelist[i]);
 	free(namelist);
@@ -642,6 +756,9 @@ dumpopt(char c, char *fmt, ...)
 static void
 dump(int verbose, int export_format)
 {
+	char buf[1024];
+	char *bp;
+	int len;
 	nfs_export	*exp;
 	struct exportent *ep;
 	int		htype;
@@ -659,7 +776,15 @@ dump(int verbose, int export_format)
 			if (strlen(ep->e_path) > 14 && !export_format)
 				printf("%-14s\n\t\t%s", ep->e_path, hname);
 			else
-				printf(((export_format)? "%s %s" : "%-14s\t%s"), ep->e_path, hname);
+				if (export_format) {
+					bp = buf;
+					len = sizeof(buf) - 1;
+					qword_add(&bp, &len, ep->e_path);
+					*bp = '\0';
+					printf("%s %s", buf, hname);
+				} else {
+					printf("%-14s\t%s", ep->e_path, hname);
+				}
 
 			if (!verbose && !export_format) {
 				printf("\n");
@@ -697,8 +822,8 @@ dump(int verbose, int export_format)
 			if (ep->e_uuid)
 				c = dumpopt(c, "fsid=%s", ep->e_uuid);
 			if (ep->e_mountpoint)
-				c = dumpopt(c, "mountpoint%s%s", 
-					    ep->e_mountpoint[0]?"=":"", 
+				c = dumpopt(c, "mountpoint%s%s",
+					    ep->e_mountpoint[0]?"=":"",
 					    ep->e_mountpoint);
 			if (ep->e_anonuid != 65534)
 				c = dumpopt(c, "anonuid=%d", ep->e_anonuid);

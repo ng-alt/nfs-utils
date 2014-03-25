@@ -266,6 +266,27 @@ static int get_uuid(const char *val, size_t uuidlen, char *u)
 	return 1;
 }
 
+
+/*
+ * Don't ask libblkid for these filesystems. Note that BTRF is ignored, because
+ * we generate the identifier from statfs->f_fsid. The rest are network or
+ * pseudo filesystems. (See <linux/magic.h> for the basic IDs.)
+ */
+static const long int nonblkid_filesystems[] = {
+    0x2fc12fc1,    /* ZFS_SUPER_MAGIC */
+    0x9123683E,    /* BTRFS_SUPER_MAGIC */
+    0xFF534D42,    /* CIFS_MAGIC_NUMBER */
+    0x1373,        /* DEVFS_SUPER_MAGIC */
+    0x73757245,    /* CODA_SUPER_MAGIC */
+    0x564C,        /* NCP_SUPER_MAGIC */
+    0x6969,        /* NFS_SUPER_MAGIC */
+    0x9FA0,        /* PROC_SUPER_MAGIC */
+    0x62656572,    /* SYSFS_MAGIC */
+    0x517B,        /* SMB_SUPER_MAGIC */
+    0x01021994,    /* TMPFS_SUPER_MAGIC */
+    0        /* last */
+};
+
 static int uuid_by_path(char *path, int type, size_t uuidlen, char *uuid)
 {
 	/* get a uuid for the filesystem found at 'path'.
@@ -297,12 +318,23 @@ static int uuid_by_path(char *path, int type, size_t uuidlen, char *uuid)
 	 */
 	struct statfs64 st;
 	char fsid_val[17];
-	const char *blkid_val;
+	const char *blkid_val = NULL;
 	const char *val;
+	int rc;
 
-	blkid_val = get_uuid_blkdev(path);
+	rc = statfs64(path, &st);
 
-	if (statfs64(path, &st) == 0 &&
+	if (type == 0 && rc == 0) {
+		const long int *bad;
+		for (bad = nonblkid_filesystems; *bad; bad++) {
+			if (*bad == st.f_type)
+				break;
+		}
+		if (*bad == 0)
+			blkid_val = get_uuid_blkdev(path);
+	}
+
+	if (rc == 0 &&
 	    (st.f_fsid.__val[0] || st.f_fsid.__val[1]))
 		snprintf(fsid_val, 17, "%08x%08x",
 			 st.f_fsid.__val[0], st.f_fsid.__val[1]);
@@ -1055,12 +1087,13 @@ static struct exportent *invoke_junction_ops(void *handle, char *dom,
 			__func__, error);
 		return NULL;
 	}
+#ifdef JP_API_VERSION
 	if (ops->jp_api_version != JP_API_VERSION) {
 		xlog(D_GENERAL, "%s: unrecognized junction API version: %u",
 			__func__, ops->jp_api_version);
 		return NULL;
 	}
-
+#endif
 	status = ops->jp_init(false);
 	if (status != JP_OK) {
 		xlog(D_GENERAL, "%s: failed to resolve %s: %s",
@@ -1107,7 +1140,11 @@ static struct exportent *lookup_junction(char *dom, const char *pathname,
 	struct link_map *map;
 	void *handle;
 
-	handle = dlopen("libnfsjunct.so", RTLD_NOW);
+#ifdef JP_NFSPLUGIN_SONAME
+	handle = dlopen(JP_NFSPLUGIN_SONAME, RTLD_NOW);
+#else
+	handle = dlopen("libnfsjunct.so.0", RTLD_NOW);
+#endif
 	if (handle == NULL) {
 		xlog(D_GENERAL, "%s: dlopen: %s", __func__, dlerror());
 		return NULL;
