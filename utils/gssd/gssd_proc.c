@@ -77,6 +77,7 @@
 #include "context.h"
 #include "nfsrpc.h"
 #include "nfslib.h"
+#include "gss_names.h"
 
 /*
  * pollarray:
@@ -217,7 +218,7 @@ get_servername(const char *name, const struct sockaddr *sa, const char *addr)
 			  NI_NAMEREQD);
 	if (err) {
 		printerr(0, "ERROR: unable to resolve %s to hostname: %s\n",
-			 addr, err == EAI_SYSTEM ? strerror(err) :
+			 addr, err == EAI_SYSTEM ? strerror(errno) :
 						   gai_strerror(err));
 		return NULL;
 	}
@@ -681,19 +682,25 @@ parse_enctypes(char *enctypes)
 	return 0;
 }
 
-static int
+static void
 do_downcall(int k5_fd, uid_t uid, struct authgss_private_data *pd,
-	    gss_buffer_desc *context_token, OM_uint32 lifetime_rec)
+	    gss_buffer_desc *context_token, OM_uint32 lifetime_rec,
+	    gss_buffer_desc *acceptor)
 {
 	char    *buf = NULL, *p = NULL, *end = NULL;
 	unsigned int timeout = context_timeout;
 	unsigned int buf_size = 0;
 
-	printerr(1, "doing downcall lifetime_rec %u\n", lifetime_rec);
+	printerr(1, "doing downcall: lifetime_rec=%u acceptor=%.*s\n",
+		lifetime_rec, acceptor->length, acceptor->value);
 	buf_size = sizeof(uid) + sizeof(timeout) + sizeof(pd->pd_seq_win) +
 		sizeof(pd->pd_ctx_hndl.length) + pd->pd_ctx_hndl.length +
-		sizeof(context_token->length) + context_token->length;
+		sizeof(context_token->length) + context_token->length +
+		sizeof(acceptor->length) + acceptor->length;
 	p = buf = malloc(buf_size);
+	if (!buf)
+		goto out_err;
+
 	end = buf + buf_size;
 
 	/* context_timeout set by -t option overrides context lifetime */
@@ -704,14 +711,15 @@ do_downcall(int k5_fd, uid_t uid, struct authgss_private_data *pd,
 	if (WRITE_BYTES(&p, end, pd->pd_seq_win)) goto out_err;
 	if (write_buffer(&p, end, &pd->pd_ctx_hndl)) goto out_err;
 	if (write_buffer(&p, end, context_token)) goto out_err;
+	if (write_buffer(&p, end, acceptor)) goto out_err;
 
 	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
-	if (buf) free(buf);
-	return 0;
+	free(buf);
+	return;
 out_err:
-	if (buf) free(buf);
+	free(buf);
 	printerr(1, "Failed to write downcall!\n");
-	return -1;
+	return;
 }
 
 static int
@@ -842,7 +850,7 @@ create_auth_rpc_client(struct clnt_info *clp,
 	OM_uint32		min_stat;
 	char			rpc_errmsg[1024];
 	int			protocol;
-	struct timeval		timeout = {5, 0};
+	struct timeval	timeout;
 	struct sockaddr		*addr = (struct sockaddr *) &clp->addr;
 	socklen_t		salen;
 
@@ -909,6 +917,10 @@ create_auth_rpc_client(struct clnt_info *clp,
 
 	if (!populate_port(addr, salen, clp->prog, clp->vers, protocol))
 		goto out_fail;
+
+	/* set the timeout according to the requested valued */
+	timeout.tv_sec = (long) rpc_timeout;
+	timeout.tv_usec = (long) 0;
 
 	rpc_clnt = nfs_get_rpcclient(addr, salen, protocol, clp->prog,
 				     clp->vers, &timeout);
@@ -1031,6 +1043,9 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 	gss_cred_id_t		gss_cred;
 	OM_uint32		maj_stat, min_stat, lifetime_rec;
 	pid_t			pid;
+	gss_name_t		gacceptor = GSS_C_NO_NAME;
+	gss_OID			mech;
+	gss_buffer_desc		acceptor  = {0};
 
 	pid = fork();
 	switch(pid) {
@@ -1171,15 +1186,24 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 		goto out_return_error;
 	}
 
-	/* Grab the context lifetime to pass to the kernel. lifetime_rec
-	 * is set to zero on error */
-	maj_stat = gss_inquire_context(&min_stat, pd.pd_ctx, NULL, NULL,
-				       &lifetime_rec, NULL, NULL, NULL, NULL);
+	/* Grab the context lifetime and acceptor name out of the ctx. */
+	maj_stat = gss_inquire_context(&min_stat, pd.pd_ctx, NULL, &gacceptor,
+				       &lifetime_rec, &mech, NULL, NULL, NULL);
 
-	if (maj_stat)
-		printerr(1, "WARNING: Failed to inquire context for lifetme "
-			    "maj_stat %u\n", maj_stat);
+	if (maj_stat != GSS_S_COMPLETE) {
+		printerr(1, "WARNING: Failed to inquire context "
+			    "maj_stat (0x%x)\n", maj_stat);
+		lifetime_rec = 0;
+	} else {
+		get_hostbased_client_buffer(gacceptor, mech, &acceptor);
+		gss_release_name(&min_stat, &gacceptor);
+	}
 
+	/*
+	 * The serialization can mean turning pd.pd_ctx into a lucid context. If
+	 * that happens then the pd.pd_ctx will be unusable, so we must never
+	 * try to use it after this point.
+	 */
 	if (serialize_context_for_kernel(&pd.pd_ctx, &token, &krb5oid, NULL)) {
 		printerr(0, "WARNING: Failed to serialize krb5 context for "
 			    "user with uid %d for server %s\n",
@@ -1187,9 +1211,10 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 		goto out_return_error;
 	}
 
-	do_downcall(fd, uid, &pd, &token, lifetime_rec);
+	do_downcall(fd, uid, &pd, &token, lifetime_rec, &acceptor);
 
 out:
+	gss_release_buffer(&min_stat, &acceptor);
 	if (token.value)
 		free(token.value);
 #ifdef HAVE_AUTHGSS_FREE_PRIVATE_DATA

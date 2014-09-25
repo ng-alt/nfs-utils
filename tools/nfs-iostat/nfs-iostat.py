@@ -213,7 +213,8 @@ class DeviceData:
         # the reference to them.  so we build new lists here
         # for the result object.
         for op in result.__rpc_data['ops']:
-            result.__rpc_data[op] = map(difference, self.__rpc_data[op], old_stats.__rpc_data[op])
+            result.__rpc_data[op] = list(map(
+                difference, self.__rpc_data[op], old_stats.__rpc_data[op]))
 
         # update the remaining keys we care about
         result.__rpc_data['rpcsends'] -= old_stats.__rpc_data['rpcsends']
@@ -243,27 +244,15 @@ class DeviceData:
         """Print attribute cache efficiency stats
         """
         nfs_stats = self.__nfs_data
-        getattr_stats = self.__rpc_data['GETATTR']
 
-        if nfs_stats['inoderevalidates'] != 0:
-            getattr_ops = float(getattr_stats[1])
-            opens = float(nfs_stats['vfsopen'])
-            revalidates = float(nfs_stats['inoderevalidates']) - opens
-            if revalidates != 0:
-                ratio = ((revalidates - getattr_ops) * 100) / revalidates
-            else:
-                ratio = 0.0
-
-            data_invalidates = float(nfs_stats['datainvalidates'])
-            attr_invalidates = float(nfs_stats['attrinvalidates'])
-
-            print()
-            print('%d inode revalidations, hitting in cache %4.2f%% of the time' % \
-                (revalidates, ratio))
-            print('%d open operations (mandatory GETATTR requests)' % opens)
-            if getattr_ops != 0:
-                print('%4.2f%% of GETATTRs resulted in data cache invalidations' % \
-                   ((data_invalidates * 100) / getattr_ops))
+        print()
+        print('%d VFS opens' % (nfs_stats['vfsopen']))
+        print('%d inoderevalidates (forced GETATTRs)' % \
+            (nfs_stats['inoderevalidates']))
+        print('%d page cache invalidations' % \
+            (nfs_stats['datainvalidates']))
+        print('%d attribute cache invalidations' % \
+            (nfs_stats['attrinvalidates']))
 
     def __print_dir_cache_stats(self, sample_time):
         """Print directory stats
@@ -353,15 +342,21 @@ class DeviceData:
             exe_per_op = 0.0
 
         op += ':'
-        print('%s' % op.lower().ljust(15), end='')
-        print('  ops/s\t\t   kB/s\t\t  kB/op\t\tretrans\t\tavg RTT (ms)\tavg exe (ms)')
+        print(format(op.lower(), '<16s'), end='')
+        print(format('ops/s', '>8s'), end='')
+        print(format('kB/s', '>16s'), end='')
+        print(format('kB/op', '>16s'), end='')
+        print(format('retrans', '>16s'), end='')
+        print(format('avg RTT (ms)', '>16s'), end='')
+        print(format('avg exe (ms)', '>16s'))
 
-        print('\t\t%7.3f' % (ops / sample_time), end='')
-        print('\t%7.3f' % (kilobytes / sample_time), end='')
-        print('\t%7.3f' % kb_per_op, end='')
-        print(' %7d (%3.1f%%)' % (retrans, retrans_percent), end='')
-        print('\t%7.3f' % rtt_per_op, end='')
-        print('\t%7.3f' % exe_per_op)
+        print(format((ops / sample_time), '>24.3f'), end='')
+        print(format((kilobytes / sample_time), '>16.3f'), end='')
+        print(format(kb_per_op, '>16.3f'), end='')
+        retransmits = '{0:>10.0f} ({1:>3.1f}%)'.format(retrans, retrans_percent).strip()
+        print(format(retransmits, '>16'), end='')
+        print(format(rtt_per_op, '>16.3f'), end='')
+        print(format(exe_per_op, '>16.3f'))
 
     def ops(self, sample_time):
         sends = float(self.__rpc_data['rpcsends'])
@@ -391,9 +386,10 @@ class DeviceData:
             (self.__nfs_data['export'], self.__nfs_data['mountpoint']))
         print()
 
-        print('   op/s\t\trpc bklog')
-        print('%7.2f' % (sends / sample_time), end='')
-        print('\t%7.2f' % backlog)
+        print(format('ops/s', '>16') + format('rpc bklog', '>16'))
+        print(format((sends / sample_time), '>16.3f'), end='')
+        print(format(backlog, '>16.3f'))
+        print()
 
         if which == 0:
             self.__print_rpc_op_stats('READ', sample_time)

@@ -91,7 +91,7 @@ host_ntop(const struct sockaddr *sap, char *buf, const size_t buflen)
  * Returns address info structure, or NULL if an error occurs.  Caller
  * must free the returned structure with freeaddrinfo(3).
  */
-__attribute_malloc__
+__attribute__((__malloc__))
 struct addrinfo *
 host_pton(const char *paddr)
 {
@@ -115,6 +115,11 @@ host_pton(const char *paddr)
 	 * have a real AF_INET presentation address, before invoking
 	 * getaddrinfo(3) to generate the full addrinfo list.
 	 */
+	if (paddr == NULL) {
+		xlog(D_GENERAL, "%s: passed a NULL presentation address",
+			__func__);
+		return NULL;
+	}
 	inet4 = 1;
 	if (inet_pton(AF_INET, paddr, &sin.sin_addr) == 0)
 		inet4 = 0;
@@ -123,15 +128,12 @@ host_pton(const char *paddr)
 	switch (error) {
 	case 0:
 		if (!inet4 && ai->ai_addr->sa_family == AF_INET) {
+			xlog(D_GENERAL, "%s: failed to convert %s",
+					__func__, paddr);
 			freeaddrinfo(ai);
 			break;
 		}
 		return ai;
-	case EAI_NONAME:
-		if (paddr == NULL)
-			xlog(D_GENERAL, "%s: passed a NULL presentation address",
-				__func__);
-		break;
 	case EAI_SYSTEM:
 		xlog(D_GENERAL, "%s: failed to convert %s: (%d) %m",
 				__func__, paddr, errno);
@@ -153,7 +155,7 @@ host_pton(const char *paddr)
  * if no information is available for @hostname.  Caller must free the
  * returned structure with freeaddrinfo(3).
  */
-__attribute_malloc__
+__attribute__((__malloc__))
 struct addrinfo *
 host_addrinfo(const char *hostname)
 {
@@ -199,7 +201,7 @@ host_addrinfo(const char *hostname)
  * the string.
  */
 #ifdef HAVE_GETNAMEINFO
-__attribute_malloc__
+__attribute__((__malloc__))
 char *
 host_canonname(const struct sockaddr *sap)
 {
@@ -234,7 +236,7 @@ host_canonname(const struct sockaddr *sap)
 	return strdup(buf);
 }
 #else	/* !HAVE_GETNAMEINFO */
-__attribute_malloc__
+__attribute__((__malloc__))
 char *
 host_canonname(const struct sockaddr *sap)
 {
@@ -266,7 +268,7 @@ host_canonname(const struct sockaddr *sap)
  *
  * Caller must free the returned structure with freeaddrinfo(3).
  */
-__attribute_malloc__
+__attribute__((__malloc__))
 struct addrinfo *
 host_reliable_addrinfo(const struct sockaddr *sap)
 {
@@ -313,7 +315,7 @@ out_free_hostname:
  * Caller must free the returned structure with freeaddrinfo(3).
  */
 #ifdef HAVE_GETNAMEINFO
-__attribute_malloc__
+__attribute__((__malloc__))
 struct addrinfo *
 host_numeric_addrinfo(const struct sockaddr *sap)
 {
@@ -361,7 +363,7 @@ host_numeric_addrinfo(const struct sockaddr *sap)
 	return ai;
 }
 #else	/* !HAVE_GETNAMEINFO */
-__attribute_malloc__
+__attribute__((__malloc__))
 struct addrinfo *
 host_numeric_addrinfo(const struct sockaddr *sap)
 {

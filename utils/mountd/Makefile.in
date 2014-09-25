@@ -355,6 +355,7 @@ enable_ipv6 = @enable_ipv6@
 enable_mountconfig = @enable_mountconfig@
 enable_nfsv4 = @enable_nfsv4@
 enable_nfsv41 = @enable_nfsv41@
+enable_svcgss = @enable_svcgss@
 exec_prefix = @exec_prefix@
 host = @host@
 host_alias = @host_alias@

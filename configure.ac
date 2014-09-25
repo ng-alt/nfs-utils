@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[1.3.0],[linux-nfs@vger.kernel.org],[nfs-utils])
+AC_INIT([linux nfs-utils],[1.3.1],[linux-nfs@vger.kernel.org],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_MACRO_DIR(aclocal)
@@ -8,6 +8,7 @@ AM_INIT_AUTOMAKE
 AC_PREREQ(2.59)
 AC_PREFIX_DEFAULT(/usr)
 AM_MAINTAINER_MODE
+AC_USE_SYSTEM_EXTENSIONS
 
 dnl *************************************************************
 dnl * Define the set of applicable options
@@ -89,21 +90,36 @@ AC_ARG_ENABLE(nfsv41,
 
 AC_ARG_ENABLE(gss,
 	[AC_HELP_STRING([--enable-gss],
-                        [enable support for rpcsec_gss @<:@default=yes@:>@])],
+              [enable client support for rpcsec_gss @<:@default=yes@:>@])],
 	enable_gss=$enableval,
 	enable_gss=yes)
 	if test "$enable_gss" = yes; then
 		GSSD=gssd
-		SVCGSSD=svcgssd
 	else
 		enable_gss=
 		GSSD=
-		SVCGSSD=
 	fi
 	AC_SUBST(GSSD)
-	AC_SUBST(SVCGSSD)
 	AC_SUBST(enable_gss)
 	AM_CONDITIONAL(CONFIG_GSS, [test "$enable_gss" = "yes"])
+
+AC_ARG_ENABLE(svcgss,
+	[AC_HELP_STRING([--enable-svcgss],
+    [enable building svcgssd for rpcsec_gss server support @<:@default=yes@:>@])],
+	enable_svcgss=$enableval,
+	enable_svcgss=yes)
+	if test "$enable_gss" = yes; then
+		if "enable_svcgss" = yes; then
+			SVCGSSD=svcgssd
+		fi
+	else
+		enable_svcgss=
+		SVCGSSD=
+	fi
+	AC_SUBST(SVCGSSD)
+	AC_SUBST(enable_svcgss)
+	AM_CONDITIONAL(CONFIG_SVCGSS, [test "$enable_svcgss" = "yes"])
+
 AC_ARG_ENABLE(kprefix,
 	[AC_HELP_STRING([--enable-kprefix], [install progs as rpc.knfsd etc])],
 	test "$enableval" = "yes" && kprefix=k,
@@ -246,9 +262,6 @@ AC_CHECK_FUNC([connect], ,
 
 AC_CHECK_FUNC([getaddrinfo], ,
               [AC_MSG_ERROR([Function 'getaddrinfo' not found.])])
-
-AC_CHECK_FUNC([getrpcbynumber], ,
-              [AC_MSG_ERROR([Function 'getrpcbynumber' not found.])])
 
 AC_CHECK_FUNC([getservbyname], ,
               [AC_MSG_ERROR([Function 'getservbyname' not found.])])
@@ -408,11 +421,10 @@ AC_FUNC_STAT
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([alarm atexit dup2 fdatasync ftruncate getcwd \
                gethostbyaddr gethostbyname gethostname getmntent \
-               getnameinfo getrpcbyname getifaddrs \
+               getnameinfo getrpcbyname getrpcbynumber getrpcbynumber_r getifaddrs \
                gettimeofday hasmntopt inet_ntoa innetgr memset mkdir pathconf \
                ppoll realpath rmdir select socket strcasecmp strchr strdup \
-               strerror strrchr strtol strtoul sigprocmask])
-
+               strerror strrchr strtol strtoul sigprocmask name_to_handle_at])
 
 dnl *************************************************************
 dnl Check for data sizes

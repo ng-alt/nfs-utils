@@ -1,10 +1,17 @@
 ## Process this file with automake to produce Makefile.in
 
-man8_MANS	= gssd.man svcgssd.man
+man8_MANS	= gssd.man
+if CONFIG_SVCGSS
+man8_MANS	+= svcgssd.man
+endif
 
 RPCPREFIX	= rpc.
 KPREFIX		= @kprefix@
-sbin_PREFIXED	= gssd svcgssd
+sbin_PREFIXED	= gssd
+if CONFIG_SVCGSS
+sbin_PREFIXED	+= svcgssd
+endif
+
 sbin_PROGRAMS	= $(sbin_PREFIXED)
 
 EXTRA_DIST = \
@@ -18,11 +25,13 @@ COMMON_SRCS = \
 	context_lucid.c \
 	gss_util.c \
 	gss_oids.c \
+	gss_names.c \
 	err_util.c \
 	\
 	context.h \
 	err_util.h \
 	gss_oids.h \
+	gss_names.h \
 	gss_util.h
 
 gssd_SOURCES = \

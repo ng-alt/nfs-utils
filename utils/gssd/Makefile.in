@@ -78,7 +78,9 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-sbin_PROGRAMS = $(am__EXEEXT_1)
+@CONFIG_SVCGSS_TRUE@am__append_1 = svcgssd.man
+@CONFIG_SVCGSS_TRUE@am__append_2 = svcgssd
+sbin_PROGRAMS = $(am__EXEEXT_2)
 subdir = utils/gssd
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/depcomp
@@ -104,13 +106,14 @@ mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/support/include/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-am__EXEEXT_1 = gssd$(EXEEXT) svcgssd$(EXEEXT)
+@CONFIG_SVCGSS_TRUE@am__EXEEXT_1 = svcgssd$(EXEEXT)
+am__EXEEXT_2 = gssd$(EXEEXT) $(am__EXEEXT_1)
 am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man8dir)"
 PROGRAMS = $(sbin_PROGRAMS)
 am__objects_1 = gssd-context.$(OBJEXT) gssd-context_mit.$(OBJEXT) \
 	gssd-context_heimdal.$(OBJEXT) gssd-context_lucid.$(OBJEXT) \
 	gssd-gss_util.$(OBJEXT) gssd-gss_oids.$(OBJEXT) \
-	gssd-err_util.$(OBJEXT)
+	gssd-gss_names.$(OBJEXT) gssd-err_util.$(OBJEXT)
 am_gssd_OBJECTS = $(am__objects_1) gssd-gssd.$(OBJEXT) \
 	gssd-gssd_main_loop.$(OBJEXT) gssd-gssd_proc.$(OBJEXT) \
 	gssd-krb5_util.$(OBJEXT)
@@ -129,7 +132,8 @@ am__objects_2 = svcgssd-context.$(OBJEXT) \
 	svcgssd-context_mit.$(OBJEXT) \
 	svcgssd-context_heimdal.$(OBJEXT) \
 	svcgssd-context_lucid.$(OBJEXT) svcgssd-gss_util.$(OBJEXT) \
-	svcgssd-gss_oids.$(OBJEXT) svcgssd-err_util.$(OBJEXT)
+	svcgssd-gss_oids.$(OBJEXT) svcgssd-gss_names.$(OBJEXT) \
+	svcgssd-err_util.$(OBJEXT)
 am_svcgssd_OBJECTS = $(am__objects_2) svcgssd-svcgssd.$(OBJEXT) \
 	svcgssd-svcgssd_main_loop.$(OBJEXT) \
 	svcgssd-svcgssd_mech2file.$(OBJEXT) \
@@ -375,6 +379,7 @@ enable_ipv6 = @enable_ipv6@
 enable_mountconfig = @enable_mountconfig@
 enable_nfsv4 = @enable_nfsv4@
 enable_nfsv41 = @enable_nfsv41@
+enable_svcgss = @enable_svcgss@
 exec_prefix = @exec_prefix@
 host = @host@
 host_alias = @host_alias@
@@ -410,10 +415,10 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-man8_MANS = gssd.man svcgssd.man
+man8_MANS = gssd.man $(am__append_1)
 RPCPREFIX = rpc.
 KPREFIX = @kprefix@
-sbin_PREFIXED = gssd svcgssd
+sbin_PREFIXED = gssd $(am__append_2)
 EXTRA_DIST = \
 	gss_destroy_creds \
 	$(man8_MANS)
@@ -425,11 +430,13 @@ COMMON_SRCS = \
 	context_lucid.c \
 	gss_util.c \
 	gss_oids.c \
+	gss_names.c \
 	err_util.c \
 	\
 	context.h \
 	err_util.h \
 	gss_oids.h \
+	gss_names.h \
 	gss_util.h
 
 gssd_SOURCES = \
@@ -574,6 +581,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-context_lucid.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-context_mit.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-err_util.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-gss_names.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-gss_oids.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-gss_util.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gssd-gssd.Po@am__quote@
@@ -585,6 +593,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-context_lucid.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-context_mit.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-err_util.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-gss_names.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-gss_oids.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-gss_util.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/svcgssd-svcgssd.Po@am__quote@
@@ -697,6 +706,20 @@ gssd-gss_oids.obj: gss_oids.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gss_oids.c' object='gssd-gss_oids.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(gssd_CFLAGS) $(CFLAGS) -c -o gssd-gss_oids.obj `if test -f 'gss_oids.c'; then $(CYGPATH_W) 'gss_oids.c'; else $(CYGPATH_W) '$(srcdir)/gss_oids.c'; fi`
+
+gssd-gss_names.o: gss_names.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(gssd_CFLAGS) $(CFLAGS) -MT gssd-gss_names.o -MD -MP -MF $(DEPDIR)/gssd-gss_names.Tpo -c -o gssd-gss_names.o `test -f 'gss_names.c' || echo '$(srcdir)/'`gss_names.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/gssd-gss_names.Tpo $(DEPDIR)/gssd-gss_names.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gss_names.c' object='gssd-gss_names.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(gssd_CFLAGS) $(CFLAGS) -c -o gssd-gss_names.o `test -f 'gss_names.c' || echo '$(srcdir)/'`gss_names.c
+
+gssd-gss_names.obj: gss_names.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(gssd_CFLAGS) $(CFLAGS) -MT gssd-gss_names.obj -MD -MP -MF $(DEPDIR)/gssd-gss_names.Tpo -c -o gssd-gss_names.obj `if test -f 'gss_names.c'; then $(CYGPATH_W) 'gss_names.c'; else $(CYGPATH_W) '$(srcdir)/gss_names.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/gssd-gss_names.Tpo $(DEPDIR)/gssd-gss_names.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gss_names.c' object='gssd-gss_names.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(gssd_CFLAGS) $(CFLAGS) -c -o gssd-gss_names.obj `if test -f 'gss_names.c'; then $(CYGPATH_W) 'gss_names.c'; else $(CYGPATH_W) '$(srcdir)/gss_names.c'; fi`
 
 gssd-err_util.o: err_util.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(gssd_CFLAGS) $(CFLAGS) -MT gssd-err_util.o -MD -MP -MF $(DEPDIR)/gssd-err_util.Tpo -c -o gssd-err_util.o `test -f 'err_util.c' || echo '$(srcdir)/'`err_util.c
@@ -851,6 +874,20 @@ svcgssd-gss_oids.obj: gss_oids.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gss_oids.c' object='svcgssd-gss_oids.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -c -o svcgssd-gss_oids.obj `if test -f 'gss_oids.c'; then $(CYGPATH_W) 'gss_oids.c'; else $(CYGPATH_W) '$(srcdir)/gss_oids.c'; fi`
+
+svcgssd-gss_names.o: gss_names.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -MT svcgssd-gss_names.o -MD -MP -MF $(DEPDIR)/svcgssd-gss_names.Tpo -c -o svcgssd-gss_names.o `test -f 'gss_names.c' || echo '$(srcdir)/'`gss_names.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/svcgssd-gss_names.Tpo $(DEPDIR)/svcgssd-gss_names.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gss_names.c' object='svcgssd-gss_names.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -c -o svcgssd-gss_names.o `test -f 'gss_names.c' || echo '$(srcdir)/'`gss_names.c
+
+svcgssd-gss_names.obj: gss_names.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -MT svcgssd-gss_names.obj -MD -MP -MF $(DEPDIR)/svcgssd-gss_names.Tpo -c -o svcgssd-gss_names.obj `if test -f 'gss_names.c'; then $(CYGPATH_W) 'gss_names.c'; else $(CYGPATH_W) '$(srcdir)/gss_names.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/svcgssd-gss_names.Tpo $(DEPDIR)/svcgssd-gss_names.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='gss_names.c' object='svcgssd-gss_names.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -c -o svcgssd-gss_names.obj `if test -f 'gss_names.c'; then $(CYGPATH_W) 'gss_names.c'; else $(CYGPATH_W) '$(srcdir)/gss_names.c'; fi`
 
 svcgssd-err_util.o: err_util.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(svcgssd_CFLAGS) $(CFLAGS) -MT svcgssd-err_util.o -MD -MP -MF $(DEPDIR)/svcgssd-err_util.Tpo -c -o svcgssd-err_util.o `test -f 'err_util.c' || echo '$(srcdir)/'`err_util.c

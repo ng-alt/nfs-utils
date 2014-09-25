@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <netdb.h>
+#include <libgen.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -101,7 +102,7 @@ main(int argc, char **argv)
 	int	count = NFSD_NPROC, c, i, error = 0, portnum = 0, fd, found_one;
 	char *p, *progname, *port, *rdma_port = NULL;
 	char **haddr = NULL;
-	unsigned int hcounter = 0;
+	int hcounter = 0;
 	int	socket_up = 0;
 	unsigned int minorvers = 0;
 	unsigned int minorversset = 0;
