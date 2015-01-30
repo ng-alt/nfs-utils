@@ -15,7 +15,6 @@ endif
 sbin_PROGRAMS	= $(sbin_PREFIXED)
 
 EXTRA_DIST = \
-	gss_destroy_creds \
 	$(man8_MANS)
 
 COMMON_SRCS = \
@@ -37,7 +36,6 @@ COMMON_SRCS = \
 gssd_SOURCES = \
 	$(COMMON_SRCS) \
 	gssd.c \
-	gssd_main_loop.c \
 	gssd_proc.c \
 	krb5_util.c \
 	\
@@ -45,12 +43,23 @@ gssd_SOURCES = \
 	krb5_util.h \
 	write_bytes.h
 
-gssd_LDADD =	../../support/nfs/libnfs.a \
-		$(RPCSECGSS_LIBS) $(KRBLIBS) $(GSSAPI_LIBS)
-gssd_LDFLAGS = $(KRBLDFLAGS) $(LIBTIRPC)
+gssd_LDADD = \
+	../../support/nfs/libnfs.a \
+	$(LIBEVENT) \
+	$(RPCSECGSS_LIBS) \
+	$(KRBLIBS) \
+	$(GSSAPI_LIBS) \
+	$(LIBTIRPC)
 
-gssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
-	      $(RPCSECGSS_CFLAGS) $(KRBCFLAGS) $(GSSAPI_CFLAGS)
+gssd_LDFLAGS = \
+	$(KRBLDFLAGS)
+
+gssd_CFLAGS = \
+	$(AM_CFLAGS) \
+	$(CFLAGS) \
+	$(RPCSECGSS_CFLAGS) \
+	$(KRBCFLAGS) \
+	$(GSSAPI_CFLAGS)
 
 svcgssd_SOURCES = \
 	$(COMMON_SRCS) \

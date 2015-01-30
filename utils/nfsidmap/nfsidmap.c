@@ -25,7 +25,7 @@ char *usage="Usage: %s [-v] [-c || [-u|-g|-r key] || [-t timeout] key desc]";
 
 #define PROCKEYS "/proc/keys"
 #ifndef DEFAULT_KEYRING
-#define DEFAULT_KEYRING "id_resolver"
+#define DEFAULT_KEYRING ".id_resolver"
 #endif
 
 #ifndef PATH_IDMAPDCONF
@@ -209,10 +209,23 @@ static int key_invalidate(char *keystr, int keymask)
 		*(strchr(buf, ' ')) = '\0';
 		sscanf(buf, "%x", &key);
 
-		if (keyctl_invalidate(key) < 0) {
-			xlog_err("keyctl_invalidate(0x%x) failed: %m", key);
-			fclose(fp);
-			return 1;
+/* older libkeyutils compatibility */
+#ifndef KEYCTL_INVALIDATE
+#define KEYCTL_INVALIDATE 21      /* invalidate a key */
+#endif
+		if (keyctl(KEYCTL_INVALIDATE, key) < 0) {
+			if (errno != EOPNOTSUPP) {
+				xlog_err("keyctl_invalidate(0x%x) failed: %m", key);
+				fclose(fp);
+				return 1;
+			} else {
+				/* older kernel compatibility attempt: */
+				if (keyctl_revoke(key) < 0) {
+					xlog_err("keyctl_revoke(0x%x) failed: %m", key);
+					fclose(fp);
+					return 1;
+				}
+			}
 		}
 
 		keymask &= ~mask;
@@ -315,6 +328,9 @@ int main(int argc, char **argv)
 		xlog_warn("key: 0x%lx type: %s value: %s timeout %ld",
 			key, type, value, timeout);
 	}
+
+	/* Become a possesor of the to-be-instantiated key to set the key's timeout */
+	request_key("keyring", DEFAULT_KEYRING, NULL, KEY_SPEC_THREAD_KEYRING);
 
 	if (strcmp(type, "uid") == 0)
 		rc = id_lookup(value, key, USER);

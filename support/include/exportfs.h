@@ -10,6 +10,7 @@
 #define EXPORTFS_H
 
 #include <netdb.h>
+#include <string.h>
 
 #include "sockaddr.h"
 #include "nfslib.h"
@@ -133,7 +134,7 @@ struct addrinfo *		client_resolve(const struct sockaddr *sap);
 int 				client_member(const char *client,
 						const char *name);
 
-void				export_read(char *fname);
+int				export_read(char *fname);
 void				export_reset(nfs_export *);
 nfs_export *			export_lookup(char *hname, char *path, int caconical);
 nfs_export *			export_find(const struct addrinfo *ai,
