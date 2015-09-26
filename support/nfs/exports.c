@@ -154,6 +154,7 @@ getexportent(int fromkernel, int fromexports)
 		}
 	}
 
+	xfree(ee.e_hostname);
 	ee = def_ee;
 
 	/* Check for default client */
@@ -176,7 +177,6 @@ getexportent(int fromkernel, int fromexports)
 		if (!has_default_opts)
 			xlog(L_WARNING, "No options for %s %s: suggest %s(sync) to avoid warning", ee.e_path, exp, exp);
 	}
-	xfree(ee.e_hostname);
 	ee.e_hostname = xstrdup(hostname);
 
 	if (parseopts(opt, &ee, fromexports && !has_default_subtree_opts, NULL) < 0)
@@ -275,6 +275,7 @@ putexportent(struct exportent *ep)
 		"no_" : "");
 	if (ep->e_flags & NFSEXP_NOREADDIRPLUS)
 		fprintf(fp, "nordirplus,");
+	fprintf(fp, "%spnfs,", (ep->e_flags & NFSEXP_PNFS)? "" : "no_");
 	if (ep->e_flags & NFSEXP_FSID) {
 		fprintf(fp, "fsid=%d,", ep->e_fsid);
 	}
@@ -407,7 +408,7 @@ int secinfo_addflavor(struct flav_info *flav, struct exportent *ep)
 	struct sec_entry *p;
 
 	for (p=ep->e_secinfo; p->flav; p++) {
-		if (p->flav == flav)
+		if (p->flav == flav || p->flav->fnum == flav->fnum)
 			return p - ep->e_secinfo;
 	}
 	if (p - ep->e_secinfo >= SECFLAVOR_COUNT) {
@@ -581,6 +582,10 @@ parseopts(char *cp, struct exportent *ep, int warn, int *had_subtree_opt_ptr)
 			clearflags(NFSEXP_NOACL, active, ep);
 		else if (strcmp(opt, "no_acl") == 0)
 			setflags(NFSEXP_NOACL, active, ep);
+		else if (!strcmp(opt, "pnfs"))
+			setflags(NFSEXP_PNFS, active, ep);
+		else if (!strcmp(opt, "no_pnfs"))
+			clearflags(NFSEXP_PNFS, active, ep);
 		else if (strncmp(opt, "anonuid=", 8) == 0) {
 			char *oe;
 			ep->e_anonuid = strtol(opt+8, &oe, 10);

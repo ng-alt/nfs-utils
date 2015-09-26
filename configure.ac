@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[1.3.2],[linux-nfs@vger.kernel.org],[nfs-utils])
+AC_INIT([linux nfs-utils],[1.3.3],[linux-nfs@vger.kernel.org],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_MACRO_DIR(aclocal)
@@ -59,8 +59,14 @@ unitdir=/usr/lib/systemd/system
 AC_ARG_WITH(systemd,
 	[AC_HELP_STRING([--with-systemd@<:@=unit-dir-path@:>@],
 			[install systemd unit files @<:@Default: no, and path defaults to /usr/lib/systemd/system if not given@:>@])],
-	test "$withval" = "no" && use_systemd=0 || unitdir=$withval use_systemd=1
-	use_systemd=0
+	if test "$withval" != "no" ; then 
+		use_systemd=1
+		if test "$withval" != "yes" ; then 
+			unitdir=$withval
+		fi
+	else
+		use_systemd=0
+	fi
 	)
 	AM_CONDITIONAL(INSTALL_SYSTEMD, [test "$use_systemd" = 1])
 	AC_SUBST(unitdir)
@@ -164,6 +170,8 @@ if test "$enable_mount" = yes; then
 				[Link mount.nfs with libmount @<:@default=no@:>@])],
 		enable_libmount=$enableval,
 		enable_libmount=no)
+else
+	enable_libmount=no
 fi
 
 AC_ARG_ENABLE(tirpc,
@@ -214,8 +222,15 @@ fi
 AC_ARG_ENABLE(nfsdcltrack,
 	[AC_HELP_STRING([--disable-nfsdcltrack],
 			[disable NFSv4 clientid tracking programs @<:@default=no@:>@])],
-	enable_nfsdctrack=$enableval,
+	enable_nfsdcltrack=$enableval,
 	enable_nfsdcltrack="yes")
+
+AC_ARG_ENABLE(osdlogin,
+	[AC_HELP_STRING([--enable-osdlogin],
+			[enable osd_login scripts @<:@default=no@:>@])],
+	enable_osdlogin=$enableval,
+	enable_osdlogin="no")
+	AM_CONDITIONAL(CONFIG_OSD_LOGIN, [test "$enable_osdlogin" = "yes" ])
 
 dnl Check for TI-RPC library and headers
 AC_LIBTIRPC
@@ -347,7 +362,7 @@ AC_SUBST(LIBBSD)
 AC_SUBST(LIBBLKID)
 AC_SUBST(LIBDL)
 
-if test "$enable_libmount" != no; then
+if test "$enable_libmount" = yes; then
    AC_CHECK_LIB(mount, mnt_context_do_mount, [LIBMOUNT="-lmount"], AC_MSG_ERROR([libmount needed]))
    AC_CHECK_HEADER(libmount/libmount.h, , AC_MSG_ERROR([Cannot find libmount header file libmount/libmount.h]))
 fi

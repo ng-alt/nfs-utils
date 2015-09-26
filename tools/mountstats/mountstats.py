@@ -474,7 +474,7 @@ class DeviceData:
         # authrefresh stats don't actually get captured in
         # /proc/self/mountstats, so we fudge it here
         authrefrsh = sends
-        return (sends, trans, authrefrsh)
+        return (sends, retrans, authrefrsh)
 
     def display_nfsstat_stats(self):
         """Pretty-print nfsstat-style stats
@@ -686,7 +686,7 @@ def mountstats_command(args):
     """Mountstats command
     """
     mountstats = parse_stats_file(args.infile)
-    mountpoints = args.mountpoints
+    mountpoints = [os.path.normpath(mp) for mp in args.mountpoints]
 
     # make certain devices contains only NFS mount points
     if len(mountpoints) > 0:
@@ -708,7 +708,7 @@ def mountstats_command(args):
                 mountpoints += [device]
     if len(mountpoints) == 0:
         print('No NFS mount points were found')
-        return
+        return 1
 
     if args.since:
         old_mountstats = parse_stats_file(args.since)
@@ -729,12 +729,13 @@ def mountstats_command(args):
     args.infile.close()
     if args.since:
         args.since.close()
+    return 0
 
 def nfsstat_command(args):
     """nfsstat-like command for NFS mount points
     """
     mountstats = parse_stats_file(args.infile)
-    mountpoints = args.mountpoints
+    mountpoints = [os.path.normpath(mp) for mp in args.mountpoints]
     v3stats = DeviceData()
     v3stats.setup_accumulator(Nfsv3ops)
     v4stats = DeviceData()
@@ -766,7 +767,7 @@ def nfsstat_command(args):
                 mountpoints += [device]
     if len(mountpoints) == 0:
         print('No NFS mount points were found')
-        return
+        return 1
 
     if args.since:
         old_mountstats = parse_stats_file(args.since)
@@ -803,6 +804,7 @@ def nfsstat_command(args):
     args.infile.close()
     if args.since:
         args.since.close()
+    return 0
 
 def print_iostat_summary(old, new, devices, time):
     for device in devices:
@@ -820,7 +822,7 @@ def iostat_command(args):
     """iostat-like command for NFS mount points
     """
     mountstats = parse_stats_file(args.infile)
-    devices = args.mountpoints
+    devices = [os.path.normpath(mp) for mp in args.mountpoints]
 
     if args.since:
         old_mountstats = parse_stats_file(args.since)
@@ -847,7 +849,7 @@ def iostat_command(args):
                 devices += [device]
     if len(devices) == 0:
         print('No NFS mount points were found')
-        return
+        return 1
 
     sample_time = 0
 
@@ -875,6 +877,7 @@ def iostat_command(args):
     args.infile.close()
     if args.since:
         args.since.close()
+    return 0
 
 class ICMAction(argparse.Action):
     """Custom action to deal with interval, count, and mountpoints.
@@ -986,7 +989,7 @@ try:
         sys.stdout.close()
         sys.stderr.close()
         sys.exit(res)
-except (SystemExit, KeyboardInterrupt, RuntimeError):
+except (KeyboardInterrupt, RuntimeError):
     sys.exit(1)
 except IOError:
     pass

@@ -1,3 +1,4 @@
+#include "config.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -16,7 +17,7 @@
 #include "conffile.h"
 
 int verbose = 0;
-char *usage="Usage: %s [-v] [-c || [-u|-g|-r key] || [-t timeout] key desc]";
+char *usage = "Usage: %s [-v] [-c || [-u|-g|-r key] || -d || -l || [-t timeout] key desc]";
 
 #define MAX_ID_LEN   11
 #define IDMAP_NAMESZ 128
@@ -32,15 +33,163 @@ char *usage="Usage: %s [-v] [-c || [-u|-g|-r key] || [-t timeout] key desc]";
 #define PATH_IDMAPDCONF "/etc/idmapd.conf"
 #endif
 
-static int keyring_clear(char *keyring);
-
 #define UIDKEYS 0x1
 #define GIDKEYS 0x2
+
+#ifndef HAVE_FIND_KEY_BY_TYPE_AND_DESC
+static key_serial_t find_key_by_type_and_desc(const char *type,
+		const char *desc, key_serial_t destringid)
+{
+	char buf[BUFSIZ];
+	key_serial_t key;
+	FILE *fp;
+
+	if ((fp = fopen(PROCKEYS, "r")) == NULL) {
+		xlog_err("fopen(%s) failed: %m", PROCKEYS);
+		return -1;
+	}
+
+	key = -1;
+	while(fgets(buf, BUFSIZ, fp) != NULL) {
+		unsigned int id;
+
+		if (strstr(buf, type) == NULL)
+			continue;
+		if (strstr(buf, desc) == NULL)
+			continue;
+		if (sscanf(buf, "%x %*s", &id) != 1) {
+			xlog_err("Unparsable keyring entry in %s", PROCKEYS);
+			continue;
+		}
+
+		key = (key_serial_t)id;
+		break;
+	}
+
+	fclose(fp);
+	return key;
+}
+#endif
+
+/*
+ * Clear all the keys on the given keyring
+ */
+static int keyring_clear(const char *keyring)
+{
+	key_serial_t key;
+
+	key = find_key_by_type_and_desc("keyring", keyring, 0);
+	if (key == -1) {
+		xlog_err("'%s' keyring was not found.", keyring);
+		return EXIT_FAILURE;
+	}
+
+	if (keyctl_clear(key) < 0) {
+		xlog_err("keyctl_clear(0x%x) failed: %m",
+				(unsigned int)key);
+		return EXIT_FAILURE;
+	}
+	
+	if (verbose)
+		xlog_warn("'%s' cleared", keyring);
+
+	return EXIT_SUCCESS;
+}
+
+static int display_default_domain(void)
+{
+	char domain[NFS4_MAX_DOMAIN_LEN];
+	int rc;
+
+	rc = nfs4_get_default_domain(NULL, domain, NFS4_MAX_DOMAIN_LEN);
+	if (rc) {
+		xlog_errno(rc, "nfs4_get_default_domain failed: %m");
+		return EXIT_FAILURE;
+	}
+
+	printf("%s\n", domain);
+	return EXIT_SUCCESS;
+}
+
+static void list_key(key_serial_t key)
+{
+	char *buffer, *c;
+	int rc;
+
+	rc = keyctl_describe_alloc(key, &buffer);
+	if (rc < 0) {
+		switch (errno) {
+		case EKEYEXPIRED:
+			printf("Expired key not displayed\n");
+			break;
+		default:
+			xlog_err("Failed to describe key: %m");
+		}
+		return;
+	}
+
+	c = strrchr(buffer, ';');
+	if (!c) {
+		xlog_err("Unparsable key not displayed\n");
+		goto out_free;
+	}
+	printf("  %s\n", ++c);
+
+out_free:
+	free(buffer);
+}
+
+static void list_keys(const char *ring_name, key_serial_t ring_id)
+{
+	key_serial_t *key;
+	void *keylist;
+	int count;
+
+	count = keyctl_read_alloc(ring_id, &keylist);
+	if (count < 0) {
+		xlog_err("Failed to read keyring %s: %m", ring_name);
+		return;
+	}
+	count /= (int)sizeof(*key);
+
+	switch (count) {
+	case 0:
+		printf("No %s keys found.\n", ring_name);
+		break;
+	case 1:
+		printf("1 %s key found:\n", ring_name);
+		break;
+	default:
+		printf("%u %s keys found:\n", count, ring_name);
+	}
+
+	for (key = keylist; count--; key++)
+		list_key(*key);
+
+	free(keylist);
+}
+
+/*
+ * List all keys on a keyring
+ */
+static int list_keyring(const char *keyring)
+{
+	key_serial_t key;
+
+	key = find_key_by_type_and_desc("keyring", keyring, 0);
+	if (key == -1) {
+		xlog_err("'%s' keyring was not found.", keyring);
+		return EXIT_FAILURE;
+	}
+
+	list_keys(keyring, key);
+	return EXIT_SUCCESS;
+}
 
 /*
  * Find either a user or group id based on the name@domain string
  */
-int id_lookup(char *name_at_domain, key_serial_t key, int type)
+static int id_lookup(char *name_at_domain, key_serial_t key, int type)
 {
 	char id[MAX_ID_LEN];
 	uid_t uid = 0;
@@ -54,30 +203,33 @@ int id_lookup(char *name_at_domain, key_serial_t key, int type)
 		rc = nfs4_group_owner_to_gid(name_at_domain, &gid);
 		sprintf(id, "%u", gid);
 	}
-	if (rc < 0)
+	if (rc < 0) {
 		xlog_errno(rc, "id_lookup: %s: failed: %m",
 			(type == USER ? "nfs4_owner_to_uid" : "nfs4_group_owner_to_gid"));
+		return EXIT_FAILURE;
+	}
 
-	if (rc == 0) {
-		rc = keyctl_instantiate(key, id, strlen(id) + 1, 0);
-		if (rc < 0) {
-			switch(rc) {
-			case -EDQUOT:
-			case -ENFILE:
-			case -ENOMEM:
-				/*
-			 	 * The keyring is full. Clear the keyring and try again
-			 	 */
-				rc = keyring_clear(DEFAULT_KEYRING);
-				if (rc == 0)
-					rc = keyctl_instantiate(key, id, strlen(id) + 1, 0);
+	rc = EXIT_SUCCESS;
+	if (keyctl_instantiate(key, id, strlen(id) + 1, 0)) {
+		switch (errno) {
+		case EDQUOT:
+		case ENFILE:
+		case ENOMEM:
+			/*
+			 * The keyring is full. Clear the keyring and try again
+			 */
+			rc = keyring_clear(DEFAULT_KEYRING);
+			if (rc)
 				break;
-			default:
-				break;
+			if (keyctl_instantiate(key, id, strlen(id) + 1, 0)) {
+				rc = EXIT_FAILURE;
+				xlog_err("id_lookup: keyctl_instantiate failed: %m");
 			}
+			break;
+		default:
+			rc = EXIT_FAILURE;
+			break;
 		}
-		if (rc < 0)
-			xlog_err("id_lookup: keyctl_instantiate failed: %m");
 	}
 
 	return rc;
@@ -86,7 +238,7 @@ int id_lookup(char *name_at_domain, key_serial_t key, int type)
 /*
  * Find the name@domain string from either a user or group id
  */
-int name_lookup(char *id, key_serial_t key, int type)
+static int name_lookup(char *id, key_serial_t key, int type)
 {
 	char name[IDMAP_NAMESZ];
 	char domain[NFS4_MAX_DOMAIN_LEN];
@@ -95,11 +247,10 @@ int name_lookup(char *id, key_serial_t key, int type)
 	int rc;
 
 	rc = nfs4_get_default_domain(NULL, domain, NFS4_MAX_DOMAIN_LEN);
-	if (rc != 0) {
+	if (rc) {
 		xlog_errno(rc,
 			"name_lookup: nfs4_get_default_domain failed: %m");
-		rc = -1;
-		goto out;
+		return EXIT_FAILURE;
 	}
 
 	if (type == USER) {
@@ -109,61 +260,21 @@ int name_lookup(char *id, key_serial_t key, int type)
 		gid = atoi(id);
 		rc = nfs4_gid_to_name(gid, domain, name, IDMAP_NAMESZ);
 	}
-	if (rc < 0)
+	if (rc) {
 		xlog_errno(rc, "name_lookup: %s: failed: %m",
 			(type == USER ? "nfs4_uid_to_name" : "nfs4_gid_to_name"));
-
-	if (rc == 0) {
-		rc = keyctl_instantiate(key, &name, strlen(name), 0);
-		if (rc < 0)
-			xlog_err("name_lookup: keyctl_instantiate failed: %m");
+		return EXIT_FAILURE;
 	}
-out:
+
+	rc = EXIT_SUCCESS;
+	if (keyctl_instantiate(key, &name, strlen(name), 0)) {
+		rc = EXIT_FAILURE;
+		xlog_err("name_lookup: keyctl_instantiate failed: %m");
+	}
+
 	return rc;
 }
-/*
- * Clear all the keys on the given keyring
- */
-static int keyring_clear(char *keyring)
-{
-	FILE *fp;
-	char buf[BUFSIZ];
-	key_serial_t key;
 
-	if (keyring == NULL)
-		keyring = DEFAULT_KEYRING;
-
-	if ((fp = fopen(PROCKEYS, "r")) == NULL) {
-		xlog_err("fopen(%s) failed: %m", PROCKEYS);
-		return 1;
-	}
-
-	while(fgets(buf, BUFSIZ, fp) != NULL) {
-		if (strstr(buf, "keyring") == NULL)
-			continue;
-		if (strstr(buf, keyring) == NULL)
-			continue;
-		if (verbose) {
-			*(strchr(buf, '\n')) = '\0';
-			xlog_warn("clearing '%s'", buf);
-		}
-		/*
-		 * The key is the first arugment in the string
-		 */
-		*(strchr(buf, ' ')) = '\0';
-		sscanf(buf, "%x", &key);
-		if (keyctl_clear(key) < 0) {
-			xlog_err("keyctl_clear(0x%x) failed: %m", key);
-			fclose(fp);
-			return 1;
-		}
-		fclose(fp);
-		return 0;
-	}
-	xlog_err("'%s' keyring was not found.", keyring);
-	fclose(fp);
-	return 1;
-}
 /*
  * Revoke a key 
  */
@@ -178,7 +289,7 @@ static int key_invalidate(char *keystr, int keymask)
 
 	if ((fp = fopen(PROCKEYS, "r")) == NULL) {
 		xlog_err("fopen(%s) failed: %m", PROCKEYS);
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	while(fgets(buf, BUFSIZ, fp) != NULL) {
@@ -217,13 +328,13 @@ static int key_invalidate(char *keystr, int keymask)
 			if (errno != EOPNOTSUPP) {
 				xlog_err("keyctl_invalidate(0x%x) failed: %m", key);
 				fclose(fp);
-				return 1;
+				return EXIT_FAILURE;
 			} else {
 				/* older kernel compatibility attempt: */
 				if (keyctl_revoke(key) < 0) {
 					xlog_err("keyctl_revoke(0x%x) failed: %m", key);
 					fclose(fp);
-					return 1;
+					return EXIT_FAILURE;
 				}
 			}
 		}
@@ -231,12 +342,12 @@ static int key_invalidate(char *keystr, int keymask)
 		keymask &= ~mask;
 		if (keymask == 0) {
 			fclose(fp);
-			return 0;
+			return EXIT_SUCCESS;
 		}
 	}
 	xlog_err("'%s' key was not found.", keystr);
 	fclose(fp);
-	return 1;
+	return EXIT_FAILURE;
 }
 
 int main(int argc, char **argv)
@@ -248,7 +359,7 @@ int main(int argc, char **argv)
 	int timeout = 600;
 	key_serial_t key;
 	char *progname, *keystr = NULL;
-	int clearing = 0, keymask = 0;
+	int clearing = 0, keymask = 0, display = 0, list = 0;
 
 	/* Set the basename */
 	if ((progname = strrchr(argv[0], '/')) != NULL)
@@ -258,8 +369,14 @@ int main(int argc, char **argv)
 
 	xlog_open(progname);
 
-	while ((opt = getopt(argc, argv, "u:g:r:ct:v")) != -1) {
+	while ((opt = getopt(argc, argv, "du:g:r:ct:vl")) != -1) {
 		switch (opt) {
+		case 'd':
+			display++;
+			break;
+		case 'l':
+			list++;
+			break;
 		case 'u':
 			keymask = UIDKEYS;
 			keystr = strdup(optarg);
@@ -289,26 +406,28 @@ int main(int argc, char **argv)
 
 	if ((rc = nfs4_init_name_mapping(PATH_IDMAPDCONF)))  {
 		xlog_errno(rc, "Unable to create name to user id mappings.");
-		return 1;
+		return EXIT_FAILURE;
 	}
 	if (!verbose)
 		verbose = conf_get_num("General", "Verbosity", 0);
 
+	if (display)
+		return display_default_domain();
+	if (list)
+		return list_keyring(DEFAULT_KEYRING);
 	if (keystr) {
-		rc = key_invalidate(keystr, keymask);
-		return rc;		
+		return key_invalidate(keystr, keymask);
 	}
 	if (clearing) {
 		xlog_syslog(0);
-		rc = keyring_clear(DEFAULT_KEYRING);
-		return rc;		
+		return keyring_clear(DEFAULT_KEYRING);
 	}
 
 	xlog_stderr(0);
 	if ((argc - optind) != 2) {
 		xlog_err("Bad arg count. Check /etc/request-key.conf");
 		xlog_warn(usage, progname);
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	if (verbose)
@@ -319,11 +438,15 @@ int main(int argc, char **argv)
 	arg = strdup(argv[optind]);
 	if (arg == NULL) {
 		xlog_err("strdup failed: %m");
-		return 1;
+		return EXIT_FAILURE;
 	}
 	type = strtok(arg, ":");
 	value = strtok(NULL, ":");
-
+	if (value == NULL) {
+		free(arg);
+		xlog_err("Error: Null uid/gid value.");
+		return EXIT_FAILURE;
+	}
 	if (verbose) {
 		xlog_warn("key: 0x%lx type: %s value: %s timeout %ld",
 			key, type, value, timeout);
@@ -342,7 +465,7 @@ int main(int argc, char **argv)
 		rc = name_lookup(value, key, GROUP);
 
 	/* Set timeout to 10 (600 seconds) minutes */
-	if (rc == 0)
+	if (rc == EXIT_SUCCESS)
 		keyctl_set_timeout(key, timeout);
 
 	free(arg);

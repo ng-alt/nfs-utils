@@ -482,6 +482,113 @@ change_identity(uid_t uid)
 	return 0;
 }
 
+AUTH *
+krb5_not_machine_creds(struct clnt_info *clp, uid_t uid, char *tgtname,
+			int *downcall_err, int *chg_err, CLIENT **rpc_clnt)
+{
+	AUTH		*auth = NULL;
+	gss_cred_id_t	gss_cred;
+	char		**dname;
+	int		err, resp = -1;
+
+	printerr(1, "krb5_not_machine_creds: uid %d tgtname %s\n", 
+		uid, tgtname);
+
+	*chg_err = change_identity(uid);
+	if (*chg_err) {
+		printerr(0, "WARNING: failed to change identity: %s",
+			strerror(*chg_err));
+		goto out;
+	}
+
+	/** Tell krb5 gss which credentials cache to use.
+	 * Try first to acquire credentials directly via GSSAPI
+	 */
+	err = gssd_acquire_user_cred(&gss_cred);
+	if (err == 0)
+		resp = create_auth_rpc_client(clp, tgtname, rpc_clnt,
+						&auth, uid,
+						AUTHTYPE_KRB5, gss_cred);
+
+	/** if create_auth_rplc_client fails try the traditional
+	 * method of trolling for credentials
+	 */
+	for (dname = ccachesearch; resp != 0 && *dname != NULL; dname++) {
+		err = gssd_setup_krb5_user_gss_ccache(uid, clp->servername,
+						*dname);
+		if (err == -EKEYEXPIRED)
+			*downcall_err = -EKEYEXPIRED;
+		else if (err == 0)
+			resp = create_auth_rpc_client(clp, tgtname, rpc_clnt,
+						&auth, uid,AUTHTYPE_KRB5,
+						GSS_C_NO_CREDENTIAL);
+	}
+
+out:
+	return auth;
+}
+
+AUTH *
+krb5_use_machine_creds(struct clnt_info *clp, uid_t uid, char *tgtname,
+		    char *service, CLIENT **rpc_clnt)
+{
+	AUTH	*auth = NULL;
+	char	**credlist = NULL;
+	char	**ccname;
+	int	nocache = 0;
+	int	success = 0;
+
+	printerr(1, "krb5_use_machine_creds: uid %d tgtname %s\n", 
+		uid, tgtname);
+
+	do {
+		gssd_refresh_krb5_machine_credential(clp->servername, NULL,
+						service);
+	/*
+	 * Get a list of credential cache names and try each
+	 * of them until one works or we've tried them all
+	 */
+		if (gssd_get_krb5_machine_cred_list(&credlist)) {
+			printerr(0, "ERROR: No credentials found "
+				"for connection to server %s\n",
+				clp->servername);
+			goto out;
+		}
+		for (ccname = credlist; ccname && *ccname; ccname++) {
+			gssd_setup_krb5_machine_gss_ccache(*ccname);
+			if ((create_auth_rpc_client(clp, tgtname, rpc_clnt,
+						&auth, uid,
+						AUTHTYPE_KRB5,
+						GSS_C_NO_CREDENTIAL)) == 0) {
+				/* Success! */
+				success++;
+				break;
+			}
+			printerr(2, "WARNING: Failed to create machine krb5"
+				"context with cred cache %s for server %s\n",
+				*ccname, clp->servername);
+		}
+		gssd_free_krb5_machine_cred_list(credlist);
+		if (!success) {
+			if(nocache == 0) {
+				nocache++;
+				printerr(2, "WARNING: Machine cache prematurely"					 "expired or corrupted trying to"
+					 "recreate cache for server %s\n",
+					clp->servername);
+			} else {
+				printerr(1, "WARNING: Failed to create machine"
+					 "krb5 context with any credentials"
+					 "cache for server %s\n",
+					clp->servername);
+				goto out;
+			}
+		}
+	} while(!success);
+
+out:
+	return auth;
+}
+
 /*
  * this code uses the userland rpcsec gss library to create a krb5
  * context on behalf of the kernel
@@ -494,39 +601,12 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 	AUTH			*auth = NULL;
 	struct authgss_private_data pd;
 	gss_buffer_desc		token;
-	char			**credlist = NULL;
-	char			**ccname;
-	char			**dirname;
-	int			create_resp = -1;
 	int			err, downcall_err = -EACCES;
-	gss_cred_id_t		gss_cred;
 	OM_uint32		maj_stat, min_stat, lifetime_rec;
-	pid_t			pid;
+	pid_t			pid, childpid = -1;
 	gss_name_t		gacceptor = GSS_C_NO_NAME;
 	gss_OID			mech;
 	gss_buffer_desc		acceptor  = {0};
-
-	pid = fork();
-	switch(pid) {
-	case 0:
-		/* Child: fall through to rest of function */
-		break;
-	case -1:
-		/* fork() failed! */
-		printerr(0, "WARNING: unable to fork() to handle upcall: %s\n",
-				strerror(errno));
-		return;
-	default:
-		/* Parent: just wait on child to exit and return */
-		do {
-			pid = wait(&err);
-		} while(pid == -1 && errno != -ECHILD);
-
-		if (WIFSIGNALED(err))
-			printerr(0, "WARNING: forked child was killed with signal %d\n",
-					WTERMSIG(err));
-		return;
-	}
 
 	printerr(1, "handling krb5 upcall (%s)\n", clp->relpath);
 
@@ -560,76 +640,48 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 	if (uid != 0 || (uid == 0 && root_uses_machine_creds == 0 &&
 				service == NULL)) {
 
-		err = change_identity(uid);
-		if (err) {
-			printerr(0, "WARNING: failed to change identity: %s",
-				 strerror(err));
-			goto out_return_error;
-		}
+		/* already running as uid 0 */
+		if (uid == 0)
+			goto no_fork;
 
-		/* Tell krb5 gss which credentials cache to use */
-		/* Try first to acquire credentials directly via GSSAPI */
-		err = gssd_acquire_user_cred(&gss_cred);
-		if (!err)
-			create_resp = create_auth_rpc_client(clp, tgtname, &rpc_clnt, &auth, uid,
-							     AUTHTYPE_KRB5, gss_cred);
-		/* if create_auth_rplc_client fails try the traditional method of
-		 * trolling for credentials */
-		for (dirname = ccachesearch; create_resp != 0 && *dirname != NULL; dirname++) {
-			err = gssd_setup_krb5_user_gss_ccache(uid, clp->servername, *dirname);
-			if (err == -EKEYEXPIRED)
-				downcall_err = -EKEYEXPIRED;
-			else if (!err)
-				create_resp = create_auth_rpc_client(clp, tgtname, &rpc_clnt, &auth, uid,
-							     AUTHTYPE_KRB5, GSS_C_NO_CREDENTIAL);
+		pid = fork();
+		switch(pid) {
+		case 0:
+			/* Child: fall through to rest of function */
+			childpid = getpid();
+			unsetenv("KRB5CCNAME");
+			printerr(1, "CHILD forked pid %d \n", childpid);
+			break;
+		case -1:
+			/* fork() failed! */
+			printerr(0, "WARNING: unable to fork() to handle"
+				"upcall: %s\n", strerror(errno));
+			return;
+		default:
+			/* Parent: just wait on child to exit and return */
+			do {
+				pid = wait(&err);
+			} while(pid == -1 && errno != -ECHILD);
+
+			if (WIFSIGNALED(err))
+				printerr(0, "WARNING: forked child was killed"
+					 "with signal %d\n", WTERMSIG(err));
+			return;
 		}
+no_fork:
+
+		auth = krb5_not_machine_creds(clp, uid, tgtname, &downcall_err,
+						&err, &rpc_clnt);
+		if (err)
+			goto out_return_error;
 	}
-	if (create_resp != 0) {
+	if (auth == NULL) {
 		if (uid == 0 && (root_uses_machine_creds == 1 ||
 				service != NULL)) {
-			int nocache = 0;
-			int success = 0;
-			do {
-				gssd_refresh_krb5_machine_credential(clp->servername,
-								     NULL, service);
-				/*
-				 * Get a list of credential cache names and try each
-				 * of them until one works or we've tried them all
-				 */
-				if (gssd_get_krb5_machine_cred_list(&credlist)) {
-					printerr(0, "ERROR: No credentials found "
-						 "for connection to server %s\n",
-						 clp->servername);
-					goto out_return_error;
-				}
-				for (ccname = credlist; ccname && *ccname; ccname++) {
-					gssd_setup_krb5_machine_gss_ccache(*ccname);
-					if ((create_auth_rpc_client(clp, tgtname, &rpc_clnt,
-								    &auth, uid,
-								    AUTHTYPE_KRB5,
-								    GSS_C_NO_CREDENTIAL)) == 0) {
-						/* Success! */
-						success++;
-						break;
-					}
-					printerr(2, "WARNING: Failed to create machine krb5 context "
-						 "with credentials cache %s for server %s\n",
-						 *ccname, clp->servername);
-				}
-				gssd_free_krb5_machine_cred_list(credlist);
-				if (!success) {
-					if(nocache == 0) {
-						nocache++;
-						printerr(2, "WARNING: Machine cache is prematurely expired or corrupted "
-						            "trying to recreate cache for server %s\n", clp->servername);
-					} else {
-						printerr(1, "WARNING: Failed to create machine krb5 context "
-						 "with any credentials cache for server %s\n",
-						 clp->servername);
-						goto out_return_error;
-					}
-				}
-			} while(!success);
+			auth =	krb5_use_machine_creds(clp, uid, tgtname,
+							service, &rpc_clnt);
+			if (auth == NULL)
+				goto out_return_error;
 		} else {
 			printerr(1, "WARNING: Failed to create krb5 context "
 				 "for user with uid %d for server %s\n",
@@ -684,7 +736,12 @@ out:
 		AUTH_DESTROY(auth);
 	if (rpc_clnt)
 		clnt_destroy(rpc_clnt);
-	exit(0);
+
+	pid = getpid();
+	if (pid == childpid)
+		exit(0);
+	else
+		return;
 
 out_return_error:
 	do_error_downcall(fd, uid, downcall_err);

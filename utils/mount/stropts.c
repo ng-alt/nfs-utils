@@ -108,12 +108,6 @@ static void nfs_default_version(struct nfsmount_info *mi)
 		return;
 	}
 
-	if (mi->version.v_mode == V_GENERAL &&
-		config_default_vers.v_mode == V_DEFAULT) {
-		mi->version.v_mode = V_SPECIFIC;
-		return;
-	}
-
 	if (mi->version.v_mode == V_DEFAULT &&
 		config_default_vers.v_mode != V_DEFAULT) {
 		mi->version.major = config_default_vers.major;
@@ -121,9 +115,9 @@ static void nfs_default_version(struct nfsmount_info *mi)
 		return;
 	}
 
-	if (mi->version.v_mode == V_GENERAL &&
-		config_default_vers.v_mode != V_DEFAULT) {
-		if (mi->version.major == config_default_vers.major)
+	if (mi->version.v_mode == V_GENERAL) {
+		if (config_default_vers.v_mode != V_DEFAULT &&
+		    mi->version.major == config_default_vers.major)
 			mi->version.minor = config_default_vers.minor;
 		return;
 	}
@@ -298,6 +292,7 @@ static int nfs_verify_lock_option(struct mount_options *options)
 			    "required for remote locking."), progname);
 		nfs_error(_("%s: Either use '-o nolock' to keep "
 			    "locks local, or start statd."), progname);
+		errno = EALREADY; /* Don't print further error message */
 		return 0;
 	}
 
@@ -742,8 +737,13 @@ static int nfs_do_mount_v4(struct nfsmount_info *mi,
 	}
 
 	if (mi->version.v_mode != V_SPECIFIC) {
-		snprintf(version_opt, sizeof(version_opt) - 1,
-			"vers=%lu.%lu", mi->version.major, mi->version.minor);
+		if (mi->version.v_mode == V_GENERAL)
+			snprintf(version_opt, sizeof(version_opt) - 1,
+				"vers=%lu", mi->version.major);
+		else
+			snprintf(version_opt, sizeof(version_opt) - 1,
+				"vers=%lu.%lu", mi->version.major,
+				mi->version.minor);
 
 		if (po_append(options, version_opt) == PO_FAILED) {
 			errno = EINVAL;

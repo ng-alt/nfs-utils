@@ -376,7 +376,7 @@ static char *next_mnt(void **v, char *p)
 		*v = f;
 	} else
 		f = *v;
-	while ((me = getmntent(f)) != NULL &&
+	while ((me = getmntent(f)) != NULL && l > 1 &&
 	       (strncmp(me->mnt_dir, p, l) != 0 ||
 		me->mnt_dir[l] != '/'))
 		;
@@ -638,18 +638,17 @@ static bool match_fsid(struct parsed_fsid *parsed, nfs_export *exp, char *path)
 		if (!is_mountpoint(path))
 			return false;
 	check_uuid:
-		if (exp->m_export.e_uuid)
+		if (exp->m_export.e_uuid) {
 			get_uuid(exp->m_export.e_uuid, parsed->uuidlen, u);
+			if (memcmp(u, parsed->fhuuid, parsed->uuidlen) == 0)
+				return true;
+		}
 		else
 			for (type = 0;
 			     uuid_by_path(path, type, parsed->uuidlen, u);
 			     type++)
 				if (memcmp(u, parsed->fhuuid, parsed->uuidlen) == 0)
 					return true;
-
-		if (memcmp(u, parsed->fhuuid, parsed->uuidlen) != 0)
-			return false;
-		return true;
 	}
 	/* Well, unreachable, actually: */
 	return false;
