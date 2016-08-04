@@ -128,6 +128,7 @@
 
 /* Global list of principals/cache file names for machine credentials */
 struct gssd_k5_kt_princ *gssd_k5_kt_princ_list = NULL;
+pthread_mutex_t ple_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef HAVE_SET_ALLOWABLE_ENCTYPES
 int limit_to_legacy_enctypes = 0;
@@ -356,7 +357,7 @@ gssd_get_single_krb5_cred(krb5_context context,
 	 */
 	now += 300;
 	if (ple->ccname && ple->endtime > now && !nocache) {
-		printerr(2, "INFO: Credentials in CC '%s' are good until %d\n",
+		printerr(3, "INFO: Credentials in CC '%s' are good until %d\n",
 			 ple->ccname, ple->endtime);
 		code = 0;
 		goto out;
@@ -383,7 +384,7 @@ gssd_get_single_krb5_cred(krb5_context context,
 			 "tickets.  May have problems behind a NAT.\n");
 #ifdef TEST_SHORT_LIFETIME
 	/* set a short lifetime (for debugging only!) */
-	printerr(0, "WARNING: Using (debug) short machine cred lifetime!\n");
+	printerr(1, "WARNING: Using (debug) short machine cred lifetime!\n");
 	krb5_get_init_creds_opt_set_tkt_life(init_opts, 5*60);
 #endif
 	opts = init_opts;
@@ -451,8 +452,7 @@ gssd_get_single_krb5_cred(krb5_context context,
 	}
 
 	code = 0;
-	printerr(2, "Successfully obtained machine credentials for "
-		 "principal '%s' stored in ccache '%s'\n", pname, cc_name);
+	printerr(2, "%s: principal '%s' ccache:'%s'\n", __func__, pname, cc_name);
   out:
 #if HAVE_KRB5_GET_INIT_CREDS_OPT_SET_ADDRESSLESS
 	if (init_opts)
@@ -465,37 +465,6 @@ gssd_get_single_krb5_cred(krb5_context context,
 	krb5_free_cred_contents(context, &my_creds);
 	free(k5err);
 	return (code);
-}
-
-/*
- * Depending on the version of Kerberos, we either need to use
- * a private function, or simply set the environment variable.
- */
-static void
-gssd_set_krb5_ccache_name(char *ccname)
-{
-#ifdef USE_GSS_KRB5_CCACHE_NAME
-	u_int	maj_stat, min_stat;
-
-	printerr(2, "using gss_krb5_ccache_name to select krb5 ccache %s\n",
-		 ccname);
-	maj_stat = gss_krb5_ccache_name(&min_stat, ccname, NULL);
-	if (maj_stat != GSS_S_COMPLETE) {
-		printerr(0, "WARNING: gss_krb5_ccache_name with "
-			"name '%s' failed (%s)\n",
-			ccname, error_message(min_stat));
-	}
-#else
-	/*
-	 * Set the KRB5CCNAME environment variable to tell the krb5 code
-	 * which credentials cache to use.  (Instead of using the private
-	 * function above for which there is no generic gssapi
-	 * equivalent.)
-	 */
-	printerr(2, "using environment variable to select krb5 ccache %s\n",
-		 ccname);
-	setenv("KRB5CCNAME", ccname, 1);
-#endif
 }
 
 /*
@@ -587,10 +556,12 @@ get_ple_by_princ(krb5_context context, krb5_principal princ)
 
 	/* Need to serialize list if we ever become multi-threaded! */
 
+	pthread_mutex_lock(&ple_lock);
 	ple = find_ple_by_princ(context, princ);
 	if (ple == NULL) {
 		ple = new_ple(context, princ);
 	}
+	pthread_mutex_unlock(&ple_lock);
 
 	return ple;
 }
@@ -797,11 +768,11 @@ find_keytab_entry(krb5_context context, krb5_keytab kt, const char *tgtname,
 	char **realmnames = NULL;
 	char myhostname[NI_MAXHOST], targethostname[NI_MAXHOST];
 	char myhostad[NI_MAXHOST+1];
-	int i, j, retval;
+	int i, j, k, retval;
 	char *default_realm = NULL;
 	char *realm;
 	char *k5err = NULL;
-	int tried_all = 0, tried_default = 0;
+	int tried_all = 0, tried_default = 0, tried_upper = 0;
 	krb5_principal princ;
 	const char *notsetstr = "not set";
 	char *adhostoverride;
@@ -835,7 +806,6 @@ find_keytab_entry(krb5_context context, krb5_keytab kt, const char *tgtname,
 	        strcpy(myhostad, myhostname);
 	        for (i = 0; myhostad[i] != 0; ++i) {
 	          if (myhostad[i] == '.') break;
-	          myhostad[i] = toupper(myhostad[i]);
 	        }
 	        myhostad[i] = '$';
 	        myhostad[i+1] = 0;
@@ -936,6 +906,19 @@ find_keytab_entry(krb5_context context, krb5_keytab kt, const char *tgtname,
 				k5err = gssd_k5_err_msg(context, code);
 				printerr(3, "%s while getting keytab entry for '%s'\n",
 					 k5err, spn);
+				/*
+				 * We tried the active directory machine account
+				 * with the hostname part as-is and failed...
+				 * convert it to uppercase and try again before
+				 * moving on to the svcname
+				 */
+				if (strcmp(svcnames[j],"$") == 0 && !tried_upper) {
+					for (k = 0; myhostad[k] != '$'; ++k) {
+						myhostad[k] = toupper(myhostad[k]);
+					}
+					j--;
+					tried_upper = 1;
+				}
 			} else {
 				printerr(3, "Success getting keytab entry for '%s'\n",spn);
 				retval = 0;
@@ -1080,9 +1063,10 @@ gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername, char *dirpattern)
 	const char		*cctype;
 	struct dirent		*d;
 	int			err, i, j;
+	u_int			maj_stat, min_stat;
 
-	printerr(2, "getting credentials for client with uid %u for "
-		    "server %s\n", uid, servername);
+	printerr(3, "looking for client creds with uid %u for "
+		    "server %s in %s\n", uid, servername, dirpattern);
 
 	for (i = 0, j = 0; dirpattern[i] != '\0'; i++) {
 		switch (dirpattern[i]) {
@@ -1115,22 +1099,16 @@ gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername, char *dirpattern)
 
 	printerr(2, "using %s as credentials cache for client with "
 		    "uid %u for server %s\n", buf, uid, servername);
-	gssd_set_krb5_ccache_name(buf);
-	return 0;
-}
 
-/*
- * Let the gss code know where to find the machine credentials ccache.
- *
- * Returns:
- *	void
- */
-void
-gssd_setup_krb5_machine_gss_ccache(char *ccname)
-{
-	printerr(2, "using %s as credentials cache for machine creds\n",
-		 ccname);
-	gssd_set_krb5_ccache_name(ccname);
+	printerr(3, "using gss_krb5_ccache_name to select krb5 ccache %s\n",
+		 buf);
+	maj_stat = gss_krb5_ccache_name(&min_stat, buf, NULL);
+	if (maj_stat != GSS_S_COMPLETE) {
+		printerr(0, "ERROR: unable to get user cred cache '%s' "
+			 "failed (%s)\n", buf, error_message(min_stat));
+		return maj_stat;
+	}
+	return 0;
 }
 
 /*
@@ -1398,16 +1376,21 @@ gssd_acquire_krb5_cred(gss_cred_id_t *gss_cred)
 int
 gssd_acquire_user_cred(gss_cred_id_t *gss_cred)
 {
-	OM_uint32 min_stat;
+	OM_uint32 maj_stat, min_stat;
 	int ret;
 
 	ret = gssd_acquire_krb5_cred(gss_cred);
+	if (ret)
+		return ret;
 
 	/* force validation of cred to check for expiry */
-	if (ret == 0) {
-		if (gss_inquire_cred(&min_stat, *gss_cred, NULL, NULL,
-				     NULL, NULL) != GSS_S_COMPLETE)
-			ret = -1;
+	maj_stat = gss_inquire_cred(&min_stat, *gss_cred,
+			NULL, NULL, NULL, NULL);
+	if (maj_stat != GSS_S_COMPLETE) {
+		if (get_verbosity() > 0)
+			pgsserr("gss_inquire_cred",
+				maj_stat, min_stat, &krb5oid);
+		ret = -1;
 	}
 
 	return ret;

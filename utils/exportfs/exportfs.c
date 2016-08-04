@@ -108,10 +108,13 @@ main(int argc, char **argv)
 	xlog_stderr(1);
 	xlog_syslog(0);
 
-	while ((c = getopt(argc, argv, "afhio:ruvs")) != EOF) {
+	while ((c = getopt(argc, argv, "ad:fhio:ruvs")) != EOF) {
 		switch(c) {
 		case 'a':
 			f_all = 1;
+			break;
+		case 'd':
+			xlog_sconfig(optarg, 1);
 			break;
 		case 'f':
 			force_flush = 1;
@@ -405,8 +408,17 @@ unexportfs_parsed(char *hname, char *path, int verbose)
 			hname = ai->ai_canonname;
 	}
 
+	/*
+	 * It's possible the specified path ends with a '/'. But
+	 * the entry from exportlist won't has the trailing '/',
+	 * so need to deal with it.
+	*/
+	size_t nlen = strlen(path);
+	while (path[nlen - 1] == '/')
+		nlen--;
+
 	for (exp = exportlist[htype].p_head; exp; exp = exp->m_next) {
-		if (path && strcmp(path, exp->m_export.e_path))
+		if (path && strncmp(path, exp->m_export.e_path, nlen))
 			continue;
 		if (htype != exp->m_client->m_type)
 			continue;
@@ -499,9 +511,10 @@ unexportfs(char *arg, int verbose)
 
 static int can_test(void)
 {
-	char buf[1024];
+	char buf[1024] = { 0 };
 	int fd;
 	int n;
+	size_t bufsiz = sizeof(buf);
 
 	fd = open("/proc/net/rpc/auth.unix.ip/channel", O_WRONLY);
 	if (fd < 0)
@@ -514,9 +527,9 @@ static int can_test(void)
 	 * commit 2f74f972  (sunrpc: prepare NFS for 2038).
 	 */
 	if (time(NULL) > INT_TO_LONG_THRESHOLD_SECS)
-		sprintf(buf, "nfsd 0.0.0.0 %ld -test-client-\n", LONG_MAX);
+		snprintf(buf, bufsiz-1, "nfsd 0.0.0.0 %ld -test-client-\n", LONG_MAX);
 	else
-		sprintf(buf, "nfsd 0.0.0.0 %d -test-client-\n", INT_MAX);
+		snprintf(buf, bufsiz-1, "nfsd 0.0.0.0 %d -test-client-\n", INT_MAX);
 
 	n = write(fd, buf, strlen(buf));
 	close(fd);
@@ -532,7 +545,8 @@ static int can_test(void)
 
 static int test_export(char *path, int with_fsid)
 {
-	char buf[1024];
+	/* beside max path, buf size should take protocol str into account */
+	char buf[NFS_MAXPATHLEN+1+64] = { 0 };
 	char *bp = buf;
 	int len = sizeof(buf);
 	int fd, n;
@@ -571,8 +585,8 @@ validate_export(nfs_export *exp)
 		xlog(L_ERROR, "Failed to stat %s: %m", path);
 		return;
 	}
-	if (!S_ISDIR(stb.st_mode) && !S_ISREG(stb.st_mode)) {
-		xlog(L_ERROR, "%s is neither a directory nor a file. "
+	if (!S_ISDIR(stb.st_mode)) {
+		xlog(L_ERROR, "%s is not a directory. "
 			"Remote access will fail", path);
 		return;
 	}
@@ -758,7 +772,8 @@ dumpopt(char c, char *fmt, ...)
 static void
 dump(int verbose, int export_format)
 {
-	char buf[1024];
+	/* buf[] size should >= sizeof(struct exportent->e_path) */
+	char buf[NFS_MAXPATHLEN+1] = { 0 };
 	char *bp;
 	int len;
 	nfs_export	*exp;
@@ -866,6 +881,6 @@ error(nfs_export *exp, int err)
 static void
 usage(const char *progname, int n)
 {
-	fprintf(stderr, "usage: %s [-afhioruvs] [host:/path]\n", progname);
+	fprintf(stderr, "usage: %s [-adfhioruvs] [host:/path]\n", progname);
 	exit(n);
 }

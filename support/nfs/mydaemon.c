@@ -49,6 +49,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <xlog.h>
 
 #include "nfslib.h"
@@ -122,6 +123,7 @@ daemon_init(bool fg)
 	dup2(tempfd, 0);
 	dup2(tempfd, 1);
 	dup2(tempfd, 2);
+	closelog();
 	dup2(pipefds[1], 3);
 	pipefds[1] = 3;
 	closeall(4);

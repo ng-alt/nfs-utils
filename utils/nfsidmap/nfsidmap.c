@@ -17,7 +17,7 @@
 #include "conffile.h"
 
 int verbose = 0;
-char *usage = "Usage: %s [-v] [-c || [-u|-g|-r key] || -d || -l || [-t timeout] key desc]";
+char *usage = "Usage: %s [-vh] [-c || [-u|-g|-r key] || -d || -l || [-t timeout] key desc]";
 
 #define MAX_ID_LEN   11
 #define IDMAP_NAMESZ 128
@@ -80,8 +80,9 @@ static int keyring_clear(const char *keyring)
 
 	key = find_key_by_type_and_desc("keyring", keyring, 0);
 	if (key == -1) {
-		xlog_err("'%s' keyring was not found.", keyring);
-		return EXIT_FAILURE;
+		if (verbose)
+			xlog_warn("'%s' keyring was not found.", keyring);
+		return EXIT_SUCCESS;
 	}
 
 	if (keyctl_clear(key) < 0) {
@@ -89,10 +90,9 @@ static int keyring_clear(const char *keyring)
 				(unsigned int)key);
 		return EXIT_FAILURE;
 	}
-	
+
 	if (verbose)
 		xlog_warn("'%s' cleared", keyring);
-
 	return EXIT_SUCCESS;
 }
 
@@ -369,7 +369,7 @@ int main(int argc, char **argv)
 
 	xlog_open(progname);
 
-	while ((opt = getopt(argc, argv, "du:g:r:ct:vl")) != -1) {
+	while ((opt = getopt(argc, argv, "hdu:g:r:ct:vl")) != -1) {
 		switch (opt) {
 		case 'd':
 			display++;
@@ -398,10 +398,16 @@ int main(int argc, char **argv)
 		case 't':
 			timeout = atoi(optarg);
 			break;
+		case 'h':
 		default:
 			xlog_warn(usage, progname);
-			break;
+			exit(opt == 'h' ? 0 : 1);
 		}
+	}
+
+	if (geteuid() != 0) {
+		xlog_err("Must be run as root.");
+		return EXIT_FAILURE;
 	}
 
 	if ((rc = nfs4_init_name_mapping(PATH_IDMAPDCONF)))  {
@@ -423,9 +429,9 @@ int main(int argc, char **argv)
 		return keyring_clear(DEFAULT_KEYRING);
 	}
 
-	xlog_stderr(0);
+	xlog_stderr(verbose);
 	if ((argc - optind) != 2) {
-		xlog_err("Bad arg count. Check /etc/request-key.conf");
+		xlog_warn("Bad arg count. Check /etc/request-key.conf");
 		xlog_warn(usage, progname);
 		return EXIT_FAILURE;
 	}

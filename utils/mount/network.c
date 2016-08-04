@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <linux/in6.h>
 #include <netinet/in.h>
 #include <rpc/rpc.h>
 #include <rpc/pmap_prot.h>
@@ -92,6 +93,7 @@ static const char *nfs_version_opttbl[] = {
 	"v4",
 	"vers",
 	"nfsvers",
+	"minorversion",
 	NULL,
 };
 
@@ -793,6 +795,8 @@ int start_statd(void)
 	if (stat(START_STATD, &stb) == 0) {
 		if (S_ISREG(stb.st_mode) && (stb.st_mode & S_IXUSR)) {
 			int cnt = STATD_TIMEOUT * 10;
+			int status = 0;
+			char * const envp[1] = { NULL };
 			const struct timespec ts = {
 				.tv_sec = 0,
 				.tv_nsec = 100000000,
@@ -800,14 +804,19 @@ int start_statd(void)
 			pid_t pid = fork();
 			switch (pid) {
 			case 0: /* child */
-				execl(START_STATD, START_STATD, NULL);
+				setgid(0);
+				setuid(0);
+				execle(START_STATD, START_STATD, NULL, envp);
 				exit(1);
 			case -1: /* error */
 				nfs_error(_("%s: fork failed: %s"),
 						progname, strerror(errno));
 				break;
 			default: /* parent */
-				waitpid(pid, NULL,0);
+				if (waitpid(pid, &status,0) == pid &&
+				    status == 0)
+					/* assume it worked */
+					return 1;
 				break;
 			}
 			while (1) {
@@ -1105,6 +1114,7 @@ static int nfs_ca_sockname(const struct sockaddr *sap, const socklen_t salen,
 		.sin6_addr		= IN6ADDR_ANY_INIT,
 	};
 	int sock, result = 0;
+	int val;
 
 	sock = socket(sap->sa_family, SOCK_DGRAM, IPPROTO_UDP);
 	if (sock < 0)
@@ -1116,6 +1126,9 @@ static int nfs_ca_sockname(const struct sockaddr *sap, const socklen_t salen,
 			goto out;
 		break;
 	case AF_INET6:
+		/* Make sure the call-back address is public/permanent */
+		val = IPV6_PREFER_SRC_PUBLIC;
+		setsockopt(sock, SOL_IPV6, IPV6_ADDR_PREFERENCES, &val, sizeof(val));
 		if (bind(sock, SAFE_SOCKADDR(&sin6), sizeof(sin6)) < 0)
 			goto out;
 		break;
@@ -1272,7 +1285,11 @@ nfs_nfs_version(struct mount_options *options, struct nfs_version *version)
 	if (!(version->major = strtol(version_val, &cptr, 10)))
 		goto ret_error;
 
-	if (version->major < 4)
+	if (strcmp(nfs_version_opttbl[i], "minorversion") == 0) {
+		version->v_mode = V_SPECIFIC;
+		version->minor = version->major;
+		version->major = 4;
+	} else if (version->major < 4)
 		version->v_mode = V_SPECIFIC;
 
 	if (*cptr == '.') {
@@ -1626,7 +1643,10 @@ int nfs_options2pmap(struct mount_options *options,
 		return 0;
 	if (!nfs_nfs_version(options, &version))
 		return 0;
-	nfs_pmap->pm_vers = version.major;
+	if (version.v_mode == V_DEFAULT)
+		nfs_pmap->pm_vers = 0;
+	else
+		nfs_pmap->pm_vers = version.major;
 	if (!nfs_nfs_protocol(options, &nfs_pmap->pm_prot))
 		return 0;
 	if (!nfs_nfs_port(options, &nfs_pmap->pm_port))

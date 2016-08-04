@@ -199,6 +199,12 @@ flush_nfsd_idmap_cache(void)
 	return ret;
 }
 
+void usage(char *progname)
+{
+	fprintf(stderr, "Usage: %s [-hfvCS] [-p path] [-c path]\n",
+		basename(progname));
+}
+
 int
 main(int argc, char **argv)
 {
@@ -225,16 +231,18 @@ main(int argc, char **argv)
 		progname = argv[0];
 	xlog_open(progname);
 
-#define GETOPTSTR "vfd:p:U:G:c:CS"
+#define GETOPTSTR "hvfd:p:U:G:c:CS"
 	opterr=0; /* Turn off error messages */
 	while ((opt = getopt(argc, argv, GETOPTSTR)) != -1) {
 		if (opt == 'c')
 			conf_path = optarg;
 		if (opt == '?') {
 			if (strchr(GETOPTSTR, optopt))
-				errx(1, "'-%c' option requires an argument.", optopt);
+				warnx("'-%c' option requires an argument.", optopt);
 			else
-				errx(1, "'-%c' is an invalid argument.", optopt);
+				warnx("'-%c' is an invalid argument.", optopt);
+			usage(progname);
+			exit(1);
 		}
 	}
 	optind = 1;
@@ -276,6 +284,9 @@ main(int argc, char **argv)
 		case 'S':
 			clientstart = 0;
 			break;
+		case 'h':
+			usage(progname);
+			exit(0);
 		default:
 			break;
 		}

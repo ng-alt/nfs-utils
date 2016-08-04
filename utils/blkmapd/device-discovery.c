@@ -51,6 +51,7 @@
 #include <libdevmapper.h>
 
 #include "device-discovery.h"
+#include "xcommon.h"
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define EVENT_BUFSIZE (1024 * EVENT_SIZE)
@@ -427,15 +428,17 @@ void sig_die(int signal)
 	BL_LOG_ERR("exit on signal(%d)\n", signal);
 	exit(1);
 }
-
+static void usage(void)
+{
+	fprintf(stderr, "Usage: blkmapd [-hdf]\n" );
+}
 /* Daemon */
 int main(int argc, char **argv)
 {
 	int opt, dflag = 0, fg = 0, ret = 1;
-	struct stat statbuf;
 	char pidbuf[64];
 
-	while ((opt = getopt(argc, argv, "df")) != -1) {
+	while ((opt = getopt(argc, argv, "hdf")) != -1) {
 		switch (opt) {
 		case 'd':
 			dflag = 1;
@@ -443,17 +446,19 @@ int main(int argc, char **argv)
 		case 'f':
 			fg = 1;
 			break;
+		case 'h':
+			usage();
+			exit(0);
+		default:
+			usage();
+			exit(1);
+			
 		}
 	}
 
 	if (fg) {
 		openlog("blkmapd", LOG_PERROR, 0);
 	} else {
-		if (!stat(PID_FILE, &statbuf)) {
-			fprintf(stderr, "Pid file %s already existed\n", PID_FILE);
-			exit(1);
-		}
-
 		if (daemon(0, 0) != 0) {
 			fprintf(stderr, "Daemonize failed\n");
 			exit(1);
@@ -467,7 +472,7 @@ int main(int argc, char **argv)
 		}
 
 		if (lockf(pidfd, F_TLOCK, 0) < 0) {
-			BL_LOG_ERR("Lock pid file %s failed\n", PID_FILE);
+			BL_LOG_ERR("Already running; Exiting!");
 			close(pidfd);
 			exit(1);
 		}
@@ -481,13 +486,13 @@ int main(int argc, char **argv)
 	signal(SIGHUP, SIG_IGN);
 
 	if (dflag) {
-		bl_discover_devices();
-		exit(0);
+		ret = bl_discover_devices();
+		goto out;
 	}
 
 	if ((bl_watch_fd = inotify_init()) < 0) {
 		BL_LOG_ERR("init inotify failed %s\n", strerror(errno));
-		exit(1);
+		goto out;
 	}
 
 	/* open pipe file */
@@ -508,7 +513,7 @@ int main(int argc, char **argv)
 			BL_LOG_ERR("inquiry process return %d\n", ret);
 		}
 	}
-
+out:
 	if (pidfd >= 0) {
 		close(pidfd);
 		unlink(PID_FILE);

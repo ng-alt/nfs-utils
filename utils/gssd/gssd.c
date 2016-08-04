@@ -87,7 +87,9 @@ unsigned int  rpc_timeout = 5;
 char *preferred_realm = NULL;
 /* Avoid DNS reverse lookups on server names */
 static bool avoid_dns = true;
-
+int thread_started = false;
+pthread_mutex_t pmutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t pcond = PTHREAD_COND_INITIALIZER;
 
 TAILQ_HEAD(topdir_list_head, topdir) topdir_list;
 
@@ -301,6 +303,22 @@ gssd_read_service_info(int dirfd, struct clnt_info *clp)
 		goto fail;
 	}
 
+	/*
+	 * The user space RPC library has no support for
+	 * RPC-over-RDMA at this time, so change 'rdma'
+	 * to 'tcp', and '20049' to '2049'.
+	 */
+	if (strcmp(protoname, "rdma") == 0) {
+		free(protoname);
+		protoname = strdup("tcp");
+		if (!protoname)
+			goto fail;
+		free(port);
+		port = strdup("2049");
+		if (!port)
+			goto fail;
+	}
+
 	if (!gssd_addrstr_to_sockaddr((struct sockaddr *)&clp->addr,
 				 address, port ? port : ""))
 		goto fail;
@@ -361,20 +379,91 @@ gssd_destroy_client(struct clnt_info *clp)
 
 static void gssd_scan(void);
 
+static int
+start_upcall_thread(void (*func)(struct clnt_upcall_info *), void *info)
+{
+	pthread_attr_t attr;
+	pthread_t th;
+	int ret;
+
+	ret = pthread_attr_init(&attr);
+	if (ret != 0) {
+		printerr(0, "ERROR: failed to init pthread attr: ret %d: %s\n",
+			 ret, strerror(errno));
+		return ret;
+	}
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	if (ret != 0) {
+		printerr(0, "ERROR: failed to create pthread attr: ret %d: "
+			 "%s\n", ret, strerror(errno));
+		return ret;
+	}
+
+	ret = pthread_create(&th, &attr, (void *)func, (void *)info);
+	if (ret != 0)
+		printerr(0, "ERROR: pthread_create failed: ret %d: %s\n",
+			 ret, strerror(errno));
+	return ret;
+}
+
+static struct clnt_upcall_info *alloc_upcall_info(struct clnt_info *clp)
+{
+	struct clnt_upcall_info *info;
+
+	info = malloc(sizeof(struct clnt_upcall_info));
+	if (info == NULL)
+		return NULL;
+	info->clp = clp;
+
+	return info;
+}
+
+/* For each upcall read the upcall info into the buffer, then create a
+ * thread in a detached state so that resources are released back into
+ * the system without the need for a join.
+ */
 static void
 gssd_clnt_gssd_cb(int UNUSED(fd), short UNUSED(which), void *data)
 {
 	struct clnt_info *clp = data;
+	struct clnt_upcall_info *info;
 
-	handle_gssd_upcall(clp);
+	info = alloc_upcall_info(clp);
+	if (info == NULL)
+		return;
+
+	info->lbuflen = read(clp->gssd_fd, info->lbuf, sizeof(info->lbuf));
+	if (info->lbuflen <= 0 || info->lbuf[info->lbuflen-1] != '\n') {
+		printerr(0, "WARNING: %s: failed reading request\n", __func__);
+		free(info);
+		return;
+	}
+	info->lbuf[info->lbuflen-1] = 0;
+
+	if (start_upcall_thread(handle_gssd_upcall, info))
+		free(info);
 }
 
 static void
 gssd_clnt_krb5_cb(int UNUSED(fd), short UNUSED(which), void *data)
 {
 	struct clnt_info *clp = data;
+	struct clnt_upcall_info *info;
 
-	handle_krb5_upcall(clp);
+	info = alloc_upcall_info(clp);
+	if (info == NULL)
+		return;
+
+	if (read(clp->krb5_fd, &info->uid,
+			sizeof(info->uid)) < (ssize_t)sizeof(info->uid)) {
+		printerr(0, "WARNING: %s: failed reading uid from krb5 "
+			 "upcall pipe: %s\n", __func__, strerror(errno));
+		free(info);
+		return;
+	}
+
+	if (start_upcall_thread(handle_krb5_upcall, info))
+		free(info);
 }
 
 static struct clnt_info *
@@ -400,8 +489,9 @@ gssd_get_clnt(struct topdir *tdi, const char *name)
 
 	clp->wd = inotify_add_watch(inotify_fd, clp->relpath, IN_CREATE | IN_DELETE);
 	if (clp->wd < 0) {
-		printerr(0, "ERROR: inotify_add_watch failed for %s: %s\n",
-			 clp->relpath, strerror(errno));
+		if (errno != ENOENT)
+			printerr(0, "ERROR: inotify_add_watch failed for %s: %s\n",
+			 	clp->relpath, strerror(errno));
 		goto out;
 	}
 
@@ -556,7 +646,7 @@ gssd_scan_topdir(const char *name)
 		if (clp->scanned)
 			continue;
 
-		printerr(2, "destroying client %s\n", clp->relpath);
+		printerr(3, "destroying client %s\n", clp->relpath);
 		saveprev = clp->list.tqe_prev;
 		TAILQ_REMOVE(&tdi->clnt_list, clp, list);
 		gssd_destroy_client(clp);
@@ -716,7 +806,7 @@ gssd_inotify_cb(int ifd, short UNUSED(which), void *UNUSED(data))
 
 found:
 			if (!tdi) {
-				printerr(1, "inotify event for unknown wd!!! - "
+				printerr(5, "inotify event for unknown wd!!! - "
 					 "ev->wd (%d) ev->name (%s) ev->mask (0x%08x)\n",
 					 ev->wd, ev->len > 0 ? ev->name : "<?>", ev->mask);
 				rescan = true;
@@ -820,7 +910,7 @@ main(int argc, char *argv[])
 	 * the results of getpw*.
 	 */
 	if (setenv("HOME", "/", 1)) {
-		printerr(1, "Unable to set $HOME: %s\n", strerror(errno));
+		printerr(0, "gssd: Unable to set $HOME: %s\n", strerror(errno));
 		exit(1);
 	}
 
@@ -865,14 +955,16 @@ main(int argc, char *argv[])
 		progname = argv[0];
 
 	initerr(progname, verbosity, fg);
-#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
-	if (verbosity && rpc_verbosity == 0)
-		rpc_verbosity = verbosity;
-	authgss_set_debug_level(rpc_verbosity);
+#ifdef HAVE_LIBTIRPC_SET_DEBUG
+	/*
+	 * Only set the libtirpc debug level if explicitly requested via -r.
+	 */
+	if (rpc_verbosity > 0)
+		libtirpc_set_debug(progname, rpc_verbosity, fg);
 #else
-        if (rpc_verbosity > 0)
-		printerr(0, "Warning: rpcsec_gss library does not "
-			    "support setting debug level\n");
+	if (rpc_verbosity > 0)
+		printerr(0, "Warning: libtirpc does not "
+			    "support setting debug levels\n");
 #endif
 
 	if (gssd_check_mechs() != 0)
@@ -884,19 +976,19 @@ main(int argc, char *argv[])
 
 	pipefs_dir = opendir(pipefs_path);
 	if (!pipefs_dir) {
-		printerr(1, "ERROR: opendir(%s) failed: %s\n", pipefs_path, strerror(errno));
+		printerr(0, "ERROR: opendir(%s) failed: %s\n", pipefs_path, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
 	pipefs_fd = dirfd(pipefs_dir);
 	if (fchdir(pipefs_fd)) {
-		printerr(1, "ERROR: fchdir(%s) failed: %s\n", pipefs_path, strerror(errno));
+		printerr(0, "ERROR: fchdir(%s) failed: %s\n", pipefs_path, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
 	inotify_fd = inotify_init1(IN_NONBLOCK);
 	if (inotify_fd == -1) {
-		printerr(1, "ERROR: inotify_init1 failed: %s\n", strerror(errno));
+		printerr(0, "ERROR: inotify_init1 failed: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
@@ -913,7 +1005,7 @@ main(int argc, char *argv[])
 
 	event_dispatch();
 
-	printerr(1, "ERROR: event_dispatch() returned!\n");
+	printerr(0, "ERROR: event_dispatch() returned!\n");
 	return EXIT_FAILURE;
 }
 

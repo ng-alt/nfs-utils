@@ -31,11 +31,8 @@
 /* Define to 1 if you have the `atexit' function. */
 #undef HAVE_ATEXIT
 
-/* Define to 1 if your rpcsec library provides authgss_free_private_data, */
+/* Define to 1 if your rpcsec library provides authgss_free_private_data */
 #undef HAVE_AUTHGSS_FREE_PRIVATE_DATA
-
-/* Define to 1 if you have the `authgss_set_debug_level' function. */
-#undef HAVE_AUTHGSS_SET_DEBUG_LEVEL
 
 /* Define this if you want to use BSD signal semantics */
 #undef HAVE_BSD_SIGNALS
@@ -113,9 +110,6 @@
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY
 
-/* Define this if the Kerberos GSS library supports gss_krb5_ccache_name */
-#undef HAVE_GSS_KRB5_CCACHE_NAME
-
 /* Define this if the Kerberos GSS library supports
    gss_krb5_free_lucid_sec_context */
 #undef HAVE_GSS_KRB5_FREE_LUCID_SEC_CONTEXT
@@ -165,6 +159,9 @@
 
 /* Define to 1 if you have and wish to use libtirpc. */
 #undef HAVE_LIBTIRPC
+
+/* Define to 1 if your tirpc library provides libtirpc_set_debug */
+#undef HAVE_LIBTIRPC_SET_DEBUG
 
 /* tcp-wrapper */
 #undef HAVE_LIBWRAP
@@ -221,6 +218,9 @@
 
 /* Define to 1 if you have the `ppoll' function. */
 #undef HAVE_PPOLL
+
+/* Define to 1 if you have the <pthread.h> header file. */
+#undef HAVE_PTHREAD_H
 
 /* Define to 1 if you have the `realpath' function. */
 #undef HAVE_REALPATH
@@ -362,8 +362,7 @@
    slash. */
 #undef LSTAT_FOLLOWS_SLASHED_SYMLINK
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 
 /* Define to 1 if `major', `minor', and `makedev' are declared in <mkdev.h>.
@@ -457,11 +456,6 @@
 
 /* Define if you want to use blkid to find uuid of filesystems */
 #undef USE_BLKID
-
-/* Define this if the private function, gss_krb5_cache_name, must be used to
-   tell the Kerberos library which credentials cache to use. Otherwise, this
-   is done by setting the KRB5CCNAME environment variable */
-#undef USE_GSS_KRB5_CCACHE_NAME
 
 /* Enable extensions on AIX 3, Interix.  */
 #ifndef _ALL_SOURCE

@@ -69,7 +69,7 @@ host_ntop(const struct sockaddr *sap, char *buf, const size_t buflen)
 
 	memset(buf, 0, buflen);
 
-	if (sin->sin_family != AF_INET)
+	if (sin->sin_family != AF_INET) {
 		(void)strncpy(buf, "bad family", buflen - 1);
 		return buf;
 	}
@@ -134,12 +134,14 @@ host_pton(const char *paddr)
 			break;
 		}
 		return ai;
+	case EAI_NONAME:
+		break;
 	case EAI_SYSTEM:
-		xlog(D_GENERAL, "%s: failed to convert %s: (%d) %m",
+		xlog(L_WARNING, "%s: failed to convert %s: (%d) %m",
 				__func__, paddr, errno);
 		break;
 	default:
-		xlog(D_GENERAL, "%s: failed to convert %s: %s",
+		xlog(L_WARNING, "%s: failed to convert %s: %s",
 				__func__, paddr, gai_strerror(error));
 		break;
 	}
@@ -228,7 +230,7 @@ host_canonname(const struct sockaddr *sap)
 	default:
 		(void)getnameinfo(sap, salen, buf, (socklen_t)sizeof(buf),
 							NULL, 0, NI_NUMERICHOST);
-		xlog(D_GENERAL, "%s: failed to resolve %s: %s",
+		xlog(D_PARSE, "%s: failed to resolve %s: %s",
 				__func__, buf, gai_strerror(error));
 		return NULL;
 	}

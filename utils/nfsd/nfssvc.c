@@ -168,22 +168,22 @@ nfssvc_setfds(const struct addrinfo *hints, const char *node, const char *port)
 			continue;
 		}
 
-		xlog(D_GENERAL, "Creating %s %s socket.", family, proto);
-
 		/* open socket and prepare to hand it off to kernel */
 		sockfd = socket(addr->ai_family, addr->ai_socktype,
 				addr->ai_protocol);
 		if (sockfd < 0) {
-			if (errno == EAFNOSUPPORT)
-				xlog(L_NOTICE, "address family %s not "
-						"supported by protocol %s",
-						family, proto);
-			else
+			if (errno != EAFNOSUPPORT) {
 				xlog(L_ERROR, "unable to create %s %s socket: "
 				     "errno %d (%m)", family, proto, errno);
-			rc = errno;
-			goto error;
+				rc = errno;
+				goto error;
+			}
+			addr = addr->ai_next;
+			continue;
 		}
+
+		xlog(D_GENERAL, "Created %s %s socket.", family, proto);
+
 #ifdef IPV6_SUPPORTED
 		if (addr->ai_family == AF_INET6 &&
 		    setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on))) {
@@ -282,7 +282,7 @@ nfssvc_set_rdmaport(const char *port)
 	int fd;
 
 	if (sv)
-		nport = sv->s_port;
+		nport = ntohs(sv->s_port);
 	else {
 		char *ep;
 		nport = strtol(port, &ep, 10);

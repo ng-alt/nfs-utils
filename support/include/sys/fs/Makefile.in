@@ -98,7 +98,7 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
 	$(top_srcdir)/aclocal/libnfsidmap.m4 \
-	$(top_srcdir)/aclocal/librpcsecgss.m4 \
+	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
 	$(top_srcdir)/aclocal/nfs-utils.m4 \
@@ -226,6 +226,7 @@ LIBMOUNT = @LIBMOUNT@
 LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
+LIBPTHREAD = @LIBPTHREAD@
 LIBS = @LIBS@
 LIBSOCKET = @LIBSOCKET@
 LIBSQLITE = @LIBSQLITE@
@@ -235,6 +236,7 @@ LIBWRAP = @LIBWRAP@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
+LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAINT = @MAINT@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@

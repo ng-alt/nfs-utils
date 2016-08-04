@@ -150,6 +150,8 @@ Nfsv3ops = [
     'COMMIT'
 ]
 
+# This list should be kept in-sync with the NFSPROC4_CLNT_* enum in
+# include/linux/nfs4.h in the kernel.
 Nfsv4ops = [
     'NULL',
     'READ',
@@ -204,7 +206,12 @@ Nfsv4ops = [
     'FREE_STATEID',
     'GETDEVICELIST',
     'BIND_CONN_TO_SESSION',
-    'DESTROY_CLIENTID'
+    'DESTROY_CLIENTID',
+    'SEEK',
+    'ALLOCATE',
+    'DEALLOCATE',
+    'LAYOUTSTATS',
+    'CLONE'
 ]
 
 class DeviceData:
@@ -563,7 +570,10 @@ class DeviceData:
         for the nfsstat command.
         """
         for op in new_stats.__rpc_data['ops']:
-            self.__rpc_data[op] = list(map(add, self.__rpc_data[op], new_stats.__rpc_data[op]))
+            try:
+                self.__rpc_data[op] = list(map(add, self.__rpc_data[op], new_stats.__rpc_data[op]))
+            except KeyError:
+                continue
 
     def __print_rpc_op_stats(self, op, sample_time):
         """Print generic stats for one RPC op
