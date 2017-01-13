@@ -379,6 +379,9 @@
 /* Define this if you want mount to read a configuration file */
 #undef MOUNT_CONFIG
 
+/* This defines the location of NFS daemon config file */
+#undef NFS_CONFFILE
+
 /* This defines the location of the NFS state files. Warning: this must match
    definitions in config.mk! */
 #undef NFS_STATEDIR

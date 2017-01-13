@@ -123,8 +123,8 @@ am__v_AR_1 =
 libexport_a_AR = $(AR) $(ARFLAGS)
 libexport_a_LIBADD =
 am_libexport_a_OBJECTS = client.$(OBJEXT) export.$(OBJEXT) \
-	hostname.$(OBJEXT) nfsctl.$(OBJEXT) rmtab.$(OBJEXT) \
-	xtab.$(OBJEXT) mount_clnt.$(OBJEXT) mount_xdr.$(OBJEXT)
+	hostname.$(OBJEXT) xtab.$(OBJEXT) mount_clnt.$(OBJEXT) \
+	mount_xdr.$(OBJEXT)
 libexport_a_OBJECTS = $(am_libexport_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -310,6 +310,7 @@ SVCGSSD = @SVCGSSD@
 TIRPC_CFLAGS = @TIRPC_CFLAGS@
 TIRPC_LIBS = @TIRPC_LIBS@
 VERSION = @VERSION@
+_sysconfdir = @_sysconfdir@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -358,6 +359,7 @@ localstatedir = @localstatedir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 mountfile = @mountfile@
+nfsconfig = @nfsconfig@
 oldincludedir = @oldincludedir@
 pdfdir = @pdfdir@
 prefix = @prefix@
@@ -382,7 +384,7 @@ GENFILES_H = mount.h
 GENFILES = $(GENFILES_CLNT) $(GENFILES_SVC) $(GENFILES_XDR) $(GENFILES_H)
 EXTRA_DIST = mount.x
 noinst_LIBRARIES = libexport.a
-libexport_a_SOURCES = client.c export.c hostname.c nfsctl.c rmtab.c \
+libexport_a_SOURCES = client.c export.c hostname.c \
 		      xtab.c mount_clnt.c mount_xdr.c
 
 BUILT_SOURCES = $(GENFILES)
@@ -445,8 +447,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hostname.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mount_clnt.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mount_xdr.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsctl.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rmtab.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xtab.Po@am__quote@
 
 .c.o:
