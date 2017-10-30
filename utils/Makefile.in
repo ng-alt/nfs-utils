@@ -87,12 +87,11 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@CONFIG_NFSV4_TRUE@am__append_1 = idmapd
-@CONFIG_NFSIDMAP_TRUE@@CONFIG_NFSV4_TRUE@am__append_2 = nfsidmap
-@CONFIG_NFSV41_TRUE@am__append_3 = blkmapd
-@CONFIG_GSS_TRUE@am__append_4 = gssd
-@CONFIG_MOUNT_TRUE@am__append_5 = mount
-@CONFIG_NFSDCLTRACK_TRUE@am__append_6 = nfsdcltrack
+@CONFIG_NFSV4_TRUE@am__append_1 = idmapd nfsidmap
+@CONFIG_NFSV41_TRUE@am__append_2 = blkmapd
+@CONFIG_GSS_TRUE@am__append_3 = gssd
+@CONFIG_MOUNT_TRUE@am__append_4 = mount
+@CONFIG_NFSDCLTRACK_TRUE@am__append_5 = nfsdcltrack
 subdir = utils
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
@@ -102,7 +101,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -269,7 +267,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@
@@ -386,7 +383,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 unitdir = @unitdir@
 OPTDIRS = $(am__append_1) $(am__append_2) $(am__append_3) \
-	$(am__append_4) $(am__append_5) $(am__append_6)
+	$(am__append_4) $(am__append_5)
 SUBDIRS = \
 	exportfs \
 	mountd \

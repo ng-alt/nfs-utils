@@ -98,7 +98,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -255,7 +254,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@

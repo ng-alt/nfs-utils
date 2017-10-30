@@ -96,6 +96,18 @@ value, which can be one or more from the list
 .BR all .
 When a list is given, the members should be comma-separated.
 .TP
+.B general
+Recognized values:
+.BR pipefs-directory .
+
+See
+.BR blkmapd (8),
+.BR rpc.idmapd (8),
+and
+.BR rpc.gssd (8)
+for details.
+
+.TP
 .B nfsdcltrack
 Recognized values:
 .BR storagedir .
@@ -154,6 +166,13 @@ section, are used to configure mountd.  See
 .BR rpc.mountd (8)
 for details.
 
+The
+.B state-directory-path
+value in the
+.B [mountd]
+section is also used by
+.BR exportfs (8).
+
 .TP
 .B statd
 Recognized values:
@@ -198,7 +217,6 @@ Recognized values:
 .BR limit-to-legacy-enctypes ,
 .BR context-timeout ,
 .BR rpc-timeout ,
-.BR pipefs-directory ,
 .BR keytab-file ,
 .BR cred-cache-directory ,
 .BR preferred-realm .

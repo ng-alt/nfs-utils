@@ -99,7 +99,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -120,7 +119,7 @@ PROGRAMS = $(sbin_PROGRAMS)
 am_nfsd_OBJECTS = nfsd.$(OBJEXT) nfssvc.$(OBJEXT)
 nfsd_OBJECTS = $(am_nfsd_OBJECTS)
 am__DEPENDENCIES_1 =
-nfsd_DEPENDENCIES = ../../support/nfs/libnfs.a $(am__DEPENDENCIES_1)
+nfsd_DEPENDENCIES = ../../support/nfs/libnfs.la $(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -287,7 +286,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@
@@ -409,7 +407,7 @@ RPCPREFIX = rpc.
 KPREFIX = @kprefix@
 noinst_HEADERS = nfssvc.h
 nfsd_SOURCES = nfsd.c nfssvc.c
-nfsd_LDADD = ../../support/nfs/libnfs.a $(LIBTIRPC)
+nfsd_LDADD = ../../support/nfs/libnfs.la $(LIBTIRPC)
 MAINTAINERCLEANFILES = Makefile.in
 all: all-am
 

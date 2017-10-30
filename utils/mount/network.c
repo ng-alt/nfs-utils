@@ -33,12 +33,19 @@
 #include <errno.h>
 #include <netdb.h>
 #include <time.h>
+#include <grp.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
-#include <linux/in6.h>
+#if defined(__GLIBC__) && (__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 24)
+/* Cannot safely include linux/in6.h in old glibc, so hardcode the needed values */
+# define IPV6_PREFER_SRC_PUBLIC 2
+# define IPV6_ADDR_PREFERENCES 72
+#else
+# include <linux/in6.h>
+#endif
 #include <netinet/in.h>
 #include <rpc/rpc.h>
 #include <rpc/pmap_prot.h>
@@ -93,7 +100,6 @@ static const char *nfs_version_opttbl[] = {
 	"v4",
 	"vers",
 	"nfsvers",
-	"minorversion",
 	NULL,
 };
 
@@ -804,6 +810,7 @@ int start_statd(void)
 			pid_t pid = fork();
 			switch (pid) {
 			case 0: /* child */
+				setgroups(0, NULL);
 				setgid(0);
 				setuid(0);
 				execle(START_STATD, START_STATD, NULL, envp);
@@ -1233,6 +1240,7 @@ nfs_nfs_program(struct mount_options *options, unsigned long *program)
 			*program = tmp;
 			return 1;
 		}
+		/* FALLTHRU */
 	case PO_BAD_VALUE:
 		nfs_error(_("%s: invalid value for 'nfsprog=' option"),
 				progname);
@@ -1252,7 +1260,7 @@ nfs_nfs_program(struct mount_options *options, unsigned long *program)
  * or FALSE if the option was specified with an invalid value.
  */
 int
-nfs_nfs_version(struct mount_options *options, struct nfs_version *version)
+nfs_nfs_version(char *type, struct mount_options *options, struct nfs_version *version)
 {
 	char *version_key, *version_val, *cptr;
 	int i, found = 0;
@@ -1267,10 +1275,11 @@ nfs_nfs_version(struct mount_options *options, struct nfs_version *version)
 		}
 	}
 
-	if (!found)
+	if (!found && strcmp(type, "nfs4") == 0)
+		version_val = type + 3;
+	else if (!found)
 		return 1;
-
-	if (i <= 2 ) {
+	else if (i <= 2 ) {
 		/* v2, v3, v4 */
 		version_val = version_key + 1;
 		version->v_mode = V_SPECIFIC;
@@ -1282,17 +1291,19 @@ nfs_nfs_version(struct mount_options *options, struct nfs_version *version)
 	if (!version_val)
 		goto ret_error;
 
-	if (!(version->major = strtol(version_val, &cptr, 10)))
+	version->major = strtol(version_val, &cptr, 10);
+	if (cptr == version_val || (*cptr && *cptr != '.'))
 		goto ret_error;
-
-	if (strcmp(nfs_version_opttbl[i], "minorversion") == 0) {
+	if (version->major == 4 && *cptr != '.' &&
+	    (version_val = po_get(options, "minorversion")) != NULL) {
+		version->minor = strtol(version_val, &cptr, 10);
+		i = -1;
+		if (*cptr)
+			goto ret_error;
 		version->v_mode = V_SPECIFIC;
-		version->minor = version->major;
-		version->major = 4;
 	} else if (version->major < 4)
 		version->v_mode = V_SPECIFIC;
-
-	if (*cptr == '.') {
+	else if (*cptr == '.') {
 		version_val = ++cptr;
 		if (!(version->minor = strtol(version_val, &cptr, 10)) && cptr == version_val)
 			goto ret_error;
@@ -1306,7 +1317,10 @@ nfs_nfs_version(struct mount_options *options, struct nfs_version *version)
 	return 1;
 
 ret_error:
-	if (i <= 2 ) {
+	if (i < 0) {
+		nfs_error(_("%s: parsing error on 'minorversion=' option"),
+			progname);
+	} else if (i <= 2 ) {
 		nfs_error(_("%s: parsing error on 'v' option"),
 			progname);
 	} else if (i == 3 ) {
@@ -1381,6 +1395,7 @@ nfs_nfs_port(struct mount_options *options, unsigned long *port)
 			*port = tmp;
 			return 1;
 		}
+		/* FALLTHRU */
 	case PO_BAD_VALUE:
 		nfs_error(_("%s: invalid value for 'port=' option"),
 				progname);
@@ -1476,6 +1491,7 @@ nfs_mount_program(struct mount_options *options, unsigned long *program)
 			*program = tmp;
 			return 1;
 		}
+		/* FALLTHRU */
 	case PO_BAD_VALUE:
 		nfs_error(_("%s: invalid value for 'mountprog=' option"),
 				progname);
@@ -1507,6 +1523,7 @@ nfs_mount_version(struct mount_options *options, unsigned long *version)
 			*version = tmp;
 			return 1;
 		}
+		/* FALLTHRU */
 	case PO_BAD_VALUE:
 		nfs_error(_("%s: invalid value for 'mountvers=' option"),
 				progname);
@@ -1573,6 +1590,7 @@ nfs_mount_port(struct mount_options *options, unsigned long *port)
 			*port = tmp;
 			return 1;
 		}
+		/* FALLTHRU */
 	case PO_BAD_VALUE:
 		nfs_error(_("%s: invalid value for 'mountport=' option"),
 				progname);
@@ -1638,10 +1656,11 @@ int nfs_options2pmap(struct mount_options *options,
 		     struct pmap *nfs_pmap, struct pmap *mnt_pmap)
 {
 	struct nfs_version version;
+	memset(&version, 0, sizeof(version));
 
 	if (!nfs_nfs_program(options, &nfs_pmap->pm_prog))
 		return 0;
-	if (!nfs_nfs_version(options, &version))
+	if (!nfs_nfs_version("nfs", options, &version))
 		return 0;
 	if (version.v_mode == V_DEFAULT)
 		nfs_pmap->pm_vers = 0;

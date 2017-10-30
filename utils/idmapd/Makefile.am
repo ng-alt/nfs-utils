@@ -15,7 +15,9 @@ idmapd_SOURCES = \
 	nfs_idmap.h \
 	queue.h
 
-idmapd_LDADD = $(LIBEVENT) $(LIBNFSIDMAP) ../../support/nfs/libnfs.a
+idmapd_LDADD = ../../support/nfs/libnfs.la \
+	       ../../support/nfsidmap/libnfsidmap.la \
+	       $(LIBEVENT)
 
 MAINTAINERCLEANFILES = Makefile.in
 

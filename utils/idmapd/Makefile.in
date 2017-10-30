@@ -98,7 +98,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -118,8 +117,8 @@ PROGRAMS = $(sbin_PROGRAMS)
 am_idmapd_OBJECTS = idmapd.$(OBJEXT)
 idmapd_OBJECTS = $(am_idmapd_OBJECTS)
 am__DEPENDENCIES_1 =
-idmapd_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
-	../../support/nfs/libnfs.a
+idmapd_DEPENDENCIES = ../../support/nfs/libnfs.la \
+	../../support/nfsidmap/libnfsidmap.la $(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -285,7 +284,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@
@@ -413,7 +411,10 @@ idmapd_SOURCES = \
 	nfs_idmap.h \
 	queue.h
 
-idmapd_LDADD = $(LIBEVENT) $(LIBNFSIDMAP) ../../support/nfs/libnfs.a
+idmapd_LDADD = ../../support/nfs/libnfs.la \
+	       ../../support/nfsidmap/libnfsidmap.la \
+	       $(LIBEVENT)
+
 MAINTAINERCLEANFILES = Makefile.in
 all: all-am
 

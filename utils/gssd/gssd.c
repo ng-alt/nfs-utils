@@ -79,7 +79,6 @@ static int pipefs_fd;
 static int inotify_fd;
 struct event inotify_ev;
 
-char *conf_path = NFS_CONFFILE;
 char *keytabfile = GSSD_DEFAULT_KEYTAB_FILE;
 char **ccachesearch;
 int  use_memcache = 0;
@@ -87,6 +86,7 @@ int  root_uses_machine_creds = 1;
 unsigned int  context_timeout = 0;
 unsigned int  rpc_timeout = 5;
 char *preferred_realm = NULL;
+char *ccachedir = NULL;
 /* Avoid DNS reverse lookups on server names */
 static bool avoid_dns = true;
 int thread_started = false;
@@ -837,21 +837,12 @@ usage(char *progname)
 	exit(1);
 }
 
-int
-main(int argc, char *argv[])
+inline static void 
+read_gss_conf(void)
 {
-	int fg = 0;
-	int verbosity = 0;
-	int rpc_verbosity = 0;
-	int opt;
-	int i;
-	extern char *optarg;
-	char *progname;
-	char *ccachedir = NULL;
-	struct event sighup_ev;
 	char *s;
 
-	conf_init();
+	conf_init(NFS_CONFFILE);
 	use_memcache = conf_get_bool("gssd", "use-memcache", use_memcache);
 	root_uses_machine_creds = conf_get_bool("gssd", "use-machine-creds",
 						root_uses_machine_creds);
@@ -865,6 +856,10 @@ main(int argc, char *argv[])
 	s = conf_get_str("gssd", "pipefs-directory");
 	if (!s)
 		s = conf_get_str("general", "pipefs-directory");
+	else
+		printerr(0, "WARNING: Specifying pipefs-directory in the [gssd] "
+			 "section of %s is deprecated.  Use the [general] "
+			 "section instead.", NFS_CONFFILE);
 	if (s)
 		pipefs_path = s;
 	s = conf_get_str("gssd", "keytab-file");
@@ -876,6 +871,22 @@ main(int argc, char *argv[])
 	s = conf_get_str("gssd", "preferred-realm");
 	if (s)
 		preferred_realm = s;
+
+}
+
+int
+main(int argc, char *argv[])
+{
+	int fg = 0;
+	int verbosity = 0;
+	int rpc_verbosity = 0;
+	int opt;
+	int i;
+	extern char *optarg;
+	char *progname;
+	struct event sighup_ev;
+
+	read_gss_conf();
 
 	while ((opt = getopt(argc, argv, "DfvrlmnMp:k:d:t:T:R:")) != -1) {
 		switch (opt) {

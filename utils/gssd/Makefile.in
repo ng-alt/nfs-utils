@@ -100,7 +100,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -127,7 +126,7 @@ am_gssd_OBJECTS = $(am__objects_1) gssd-gssd.$(OBJEXT) \
 	gssd-gssd_proc.$(OBJEXT) gssd-krb5_util.$(OBJEXT)
 gssd_OBJECTS = $(am_gssd_OBJECTS)
 am__DEPENDENCIES_1 =
-gssd_DEPENDENCIES = ../../support/nfs/libnfs.a $(am__DEPENDENCIES_1) \
+gssd_DEPENDENCIES = ../../support/nfs/libnfs.la $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1)
@@ -149,8 +148,8 @@ am_svcgssd_OBJECTS = $(am__objects_2) svcgssd-svcgssd.$(OBJEXT) \
 	svcgssd-svcgssd_mech2file.$(OBJEXT) \
 	svcgssd-svcgssd_proc.$(OBJEXT) svcgssd-svcgssd_krb5.$(OBJEXT)
 svcgssd_OBJECTS = $(am_svcgssd_OBJECTS)
-svcgssd_DEPENDENCIES = ../../support/nfs/libnfs.a \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+svcgssd_DEPENDENCIES = ../../support/nfs/libnfs.la \
+	../../support/nfsidmap/libnfsidmap.la $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1)
 svcgssd_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -317,7 +316,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@
@@ -467,7 +465,7 @@ gssd_SOURCES = \
 	write_bytes.h
 
 gssd_LDADD = \
-	../../support/nfs/libnfs.a \
+	../../support/nfs/libnfs.la \
 	$(LIBEVENT) \
 	$(RPCSECGSS_LIBS) \
 	$(KRBLIBS) \
@@ -497,8 +495,9 @@ svcgssd_SOURCES = \
 	svcgssd.h
 
 svcgssd_LDADD = \
-	../../support/nfs/libnfs.a \
-	$(RPCSECGSS_LIBS) $(LIBNFSIDMAP) \
+	../../support/nfs/libnfs.la \
+	../../support/nfsidmap/libnfsidmap.la \
+	$(RPCSECGSS_LIBS) \
 	$(KRBLIBS) $(GSSAPI_LIBS) $(LIBTIRPC)
 
 svcgssd_LDFLAGS = $(KRBLDFLAGS)

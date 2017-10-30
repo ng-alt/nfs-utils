@@ -29,6 +29,7 @@
 #include "misc.h"
 #include "nfslib.h"
 #include "exportfs.h"
+#include "systemd.h"
 
 /* A simple "set of strings" to remove duplicates
  * found in /etc/exports
@@ -55,38 +56,31 @@ static int is_unique(struct list **lp, char *path)
 	return 1;
 }
 
-/* We need to convert a path name to a systemd unit
- * name.  This requires some translation ('/' -> '-')
- * and some escaping.
- */
-static void systemd_escape(FILE *f, char *path)
+static int has_noauto_flag(char *path)
 {
-	while (*path == '/')
-		path++;
-	if (!*path) {
-		/* "/" becomes "-", otherwise leading "/" is ignored */
-		fputs("-", f);
-		return;
-	}
-	while (*path) {
-		char c = *path++;
+	FILE		*fstab;
+	struct mntent	*mnt;
 
-		if (c == '/') {
-			/* multiple non-trailing slashes become '-' */
-			while (*path == '/')
-				path++;
-			if (*path)
-				fputs("-", f);
-		} else if (isalnum(c) || c == ':' || c == '.')
-			fputc(c, f);
-		else
-			fprintf(f, "\\x%02x", c & 0xff);
+	fstab = setmntent("/etc/fstab", "r");
+	if (!fstab)
+		return 0;
+
+	while ((mnt = getmntent(fstab)) != NULL) {
+		int l = strlen(mnt->mnt_dir);
+		if (strncmp(mnt->mnt_dir, path, l) != 0)
+			continue;
+		if (path[l] && path[l] != '/')
+			continue;
+		if (hasmntopt(mnt, "noauto"))
+			break;
 	}
+	fclose(fstab);
+	return mnt != NULL;
 }
 
 int main(int argc, char *argv[])
 {
-	char		*path;
+	char		*path, *spath;
 	char		dirbase[] = "/nfs-server.service.d";
 	char		filebase[] = "/order-with-mounts.conf";
 	nfs_export	*exp;
@@ -124,6 +118,10 @@ int main(int argc, char *argv[])
 		for (exp = exportlist[i].p_head; exp; exp = exp->m_next) {
 			if (!is_unique(&list, exp->m_export.e_path))
 				continue;
+			if (exp->m_export.e_mountpoint)
+				continue;
+			if (has_noauto_flag(exp->m_export.e_path))
+				continue;
 			if (strchr(exp->m_export.e_path, ' '))
 				fprintf(f, "RequiresMountsFor=\"%s\"\n",
 					exp->m_export.e_path);
@@ -141,9 +139,15 @@ int main(int argc, char *argv[])
 		if (strcmp(mnt->mnt_type, "nfs") != 0 &&
 		    strcmp(mnt->mnt_type, "nfs4") != 0)
 			continue;
-		fprintf(f, "Before= ");
-		systemd_escape(f, mnt->mnt_dir);
-		fprintf(f, ".mount\n");
+
+		spath = systemd_escape(mnt->mnt_dir, ".mount");
+		if (!spath) {
+			fprintf(stderr, 
+				"nfs-server-generator: convert path failed: %s\n",
+				mnt->mnt_dir);
+			continue;
+		}
+		fprintf(f, "Before=%s\n", spath);
 	}
 
 	fclose(fstab);

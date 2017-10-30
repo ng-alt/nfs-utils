@@ -11,6 +11,12 @@
 /* Define to 1 if using `alloca.c'. */
 #undef C_ALLOCA
 
+/* Enable GUMS mapping library support */
+#undef ENABLE_GUMS
+
+/* Enable LDAP Support */
+#undef ENABLE_LDAP
+
 /* Define to the type of elements in the array set by `getgroups'. Usually
    this is either `int' or `gid_t'. */
 #undef GETGROUPS_T
@@ -157,6 +163,9 @@
 /* Define to 1 if you have the <libio.h> header file. */
 #undef HAVE_LIBIO_H
 
+/* Define to 1 if you have the `resolv' library (-lresolv). */
+#undef HAVE_LIBRESOLV
+
 /* Define to 1 if you have and wish to use libtirpc. */
 #undef HAVE_LIBTIRPC
 
@@ -200,12 +209,6 @@
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
-
-/* Define to 1 if you have the `nfs4_set_debug' function. */
-#undef HAVE_NFS4_SET_DEBUG
-
-/* Define to 1 if you have the <nfsidmap.h> header file. */
-#undef HAVE_NFSIDMAP_H
 
 /* Define to 1 if you have the <nfs-plugin.h> header file. */
 #undef HAVE_NFS_PLUGIN_H
@@ -409,6 +412,9 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
+
+/* Define this to change the plugins path */
+#undef PATH_PLUGINS
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #undef RETSIGTYPE

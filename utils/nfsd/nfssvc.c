@@ -112,7 +112,7 @@ static int
 nfssvc_setfds(const struct addrinfo *hints, const char *node, const char *port)
 {
 	int fd, on = 1, fac = L_ERROR;
-	int sockfd = -1, rc = 0;
+	int sockfd = -1, rc = 0, bounded = 0;
 	struct addrinfo *addrhead = NULL, *addr;
 	char *proto, *family;
 
@@ -233,6 +233,8 @@ nfssvc_setfds(const struct addrinfo *hints, const char *node, const char *port)
 			rc = errno;
 			goto error;
 		}
+		bounded++;
+
 		close(fd);
 		close(sockfd);
 		sockfd = fd = -1;
@@ -245,7 +247,7 @@ error:
 		close(sockfd);
 	if (addrhead)
 		freeaddrinfo(addrhead);
-	return rc;
+	return (bounded ? 0 : rc);
 }
 
 int
@@ -330,36 +332,78 @@ nfssvc_set_time(const char *type, const int seconds)
 }
 
 void
+nfssvc_get_minormask(unsigned int *mask)
+{
+	int fd;
+	char *ptr = buf;
+	ssize_t size;
+
+	fd = open(NFSD_VERS_FILE, O_RDONLY);
+	if (fd < 0)
+		return;
+
+	size = read(fd, buf, sizeof(buf));
+	if (size < 0) {
+		xlog(L_ERROR, "Getting versions failed: errno %d (%m)", errno);
+		goto out;
+	}
+	ptr[size] = '\0';
+	for (;;) {
+		unsigned vers, minor = 0;
+		char *token = strtok(ptr, " ");
+
+		if (!token)
+			break;
+		ptr = NULL;
+		if (*token != '+' && *token != '-')
+			continue;
+		if (sscanf(++token, "%u.%u", &vers, &minor) > 0 &&
+		    vers == 4 && minor <= NFS4_MAXMINOR)
+			NFSCTL_MINORSET(*mask, minor);
+	}
+out:
+	close(fd);
+	return;
+}
+
+static int
+nfssvc_print_vers(char *ptr, unsigned size, unsigned vers, unsigned minorvers,
+		int isset)
+{
+	char sign = isset ? '+' : '-';
+	if (minorvers == 0)
+		return snprintf(ptr, size, "%c%u ", sign, vers);
+	return snprintf(ptr, size, "%c%u.%u ", sign, vers, minorvers);
+}
+
+void
 nfssvc_setvers(unsigned int ctlbits, unsigned int minorvers, unsigned int minorversset)
 {
 	int fd, n, off;
-	char *ptr;
 
-	ptr = buf;
 	off = 0;
 	fd = open(NFSD_VERS_FILE, O_WRONLY);
 	if (fd < 0)
 		return;
 
-	for (n = NFS4_MINMINOR; n <= NFS4_MAXMINOR; n++) {
-		if (NFSCTL_VERISSET(minorversset, n)) {
-			if (NFSCTL_VERISSET(minorvers, n))
-				off += snprintf(ptr+off, sizeof(buf) - off, "+4.%d ", n);
-			else
-				off += snprintf(ptr+off, sizeof(buf) - off, "-4.%d ", n);
-		}
+	for (n = NFSD_MINVERS; n <= ((NFSD_MAXVERS < 3) ? NFSD_MAXVERS : 3); n++)
+		off += nfssvc_print_vers(&buf[off], sizeof(buf) - off,
+				n, 0, NFSCTL_VERISSET(ctlbits, n));
+
+	for (n = 0; n <= NFS4_MAXMINOR; n++) {
+		if (!NFSCTL_MINORISSET(minorversset, n))
+			continue;
+		off += nfssvc_print_vers(&buf[off], sizeof(buf) - off,
+				4, n, NFSCTL_MINORISSET(minorvers, n));
 	}
-	for (n = NFSD_MINVERS; n <= NFSD_MAXVERS; n++) {
-		if (NFSCTL_VERISSET(ctlbits, n))
-		    off += snprintf(ptr+off, sizeof(buf) - off, "+%d ", n);
-		else
-		    off += snprintf(ptr+off, sizeof(buf) - off, "-%d ", n);
-	}
+	if (!off--)
+		goto out;
+	buf[off] = '\0';
 	xlog(D_GENERAL, "Writing version string to kernel: %s", buf);
-	snprintf(ptr+off, sizeof(buf) - off, "\n");
+	snprintf(&buf[off], sizeof(buf) - off, "\n");
 	if (write(fd, buf, strlen(buf)) != (ssize_t)strlen(buf))
 		xlog(L_ERROR, "Setting version failed: errno %d (%m)", errno);
-
+out:
 	close(fd);
 
 	return;

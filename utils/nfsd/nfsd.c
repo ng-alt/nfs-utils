@@ -34,8 +34,6 @@
 #define NFSD_NPROC 8
 #endif
 
-char *conf_path = NFS_CONFFILE;
-
 static void	usage(const char *);
 
 static struct option longopts[] =
@@ -44,7 +42,9 @@ static struct option longopts[] =
 	{ "help", 0, 0, 'h' },
 	{ "no-nfs-version", 1, 0, 'N' },
 	{ "nfs-version", 1, 0, 'V' },
+	{ "tcp", 0, 0, 't' },
 	{ "no-tcp", 0, 0, 'T' },
+	{ "udp", 0, 0, 'u' },
 	{ "no-udp", 0, 0, 'U' },
 	{ "port", 1, 0, 'P' },
 	{ "port", 1, 0, 'p' },
@@ -67,8 +67,9 @@ main(int argc, char **argv)
 	int	socket_up = 0;
 	unsigned int minorvers = 0;
 	unsigned int minorversset = 0;
+	unsigned int minormask = 0;
 	unsigned int versbits = NFSCTL_VERDEFAULT;
-	unsigned int protobits = NFSCTL_ALLBITS;
+	unsigned int protobits = NFSCTL_PROTODEFAULT;
 	int grace = -1;
 	int lease = -1;
 
@@ -79,7 +80,7 @@ main(int argc, char **argv)
 	xlog_syslog(0);
 	xlog_stderr(1);
 
-	conf_init();
+	conf_init(NFS_CONFFILE); 
 	xlog_from_conffile("nfsd");
 	count = conf_get_num("nfsd", "threads", count);
 	grace = conf_get_num("nfsd", "grace-time", grace);
@@ -104,10 +105,16 @@ main(int argc, char **argv)
 		else
 			NFSCTL_VERUNSET(versbits, i);
 	}
+
+	nfssvc_get_minormask(&minormask);
 	/* We assume the kernel will default all minor versions to 'on',
 	 * and allow the config file to disable some.
 	 */
-	for (i = NFS4_MINMINOR; i <= NFS4_MAXMINOR; i++) {
+	if (NFSCTL_VERISSET(versbits, 4)) {
+		NFSCTL_MINORSET(minorversset, 0);
+		NFSCTL_MINORSET(minorvers, 0);
+	}
+	for (i = 1; i <= NFS4_MAXMINOR; i++) {
 		char tag[20];
 		sprintf(tag, "vers4.%d", i);
 		/* The default for minor version support is to let the
@@ -119,12 +126,12 @@ main(int argc, char **argv)
 		 * (i.e. don't set the bit in minorversset).
 		 */
 		if (!conf_get_bool("nfsd", tag, 1)) {
-			NFSCTL_VERSET(minorversset, i);
-			NFSCTL_VERUNSET(minorvers, i);
+			NFSCTL_MINORSET(minorversset, i);
+			NFSCTL_MINORUNSET(minorvers, i);
 		}
 		if (conf_get_bool("nfsd", tag, 0)) {
-			NFSCTL_VERSET(minorversset, i);
-			NFSCTL_VERSET(minorvers, i);
+			NFSCTL_MINORSET(minorversset, i);
+			NFSCTL_MINORSET(minorvers, i);
 		}
 	}
 
@@ -138,7 +145,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	while ((c = getopt_long(argc, argv, "dH:hN:V:p:P:sTUrG:L:", longopts, NULL)) != EOF) {
+	while ((c = getopt_long(argc, argv, "dH:hN:V:p:P:stTituUrG:L:", longopts, NULL)) != EOF) {
 		switch(c) {
 		case 'd':
 			xlog_config(D_ALL, 1);
@@ -179,14 +186,19 @@ main(int argc, char **argv)
 			case 4:
 				if (*p == '.') {
 					int i = atoi(p+1);
-					if (i < NFS4_MINMINOR || i > NFS4_MAXMINOR) {
+					if (i < 0 || i > NFS4_MAXMINOR) {
 						fprintf(stderr, "%s: unsupported minor version\n", optarg);
 						exit(1);
 					}
-					NFSCTL_VERSET(minorversset, i);
-					NFSCTL_VERUNSET(minorvers, i);
-					break;
+					NFSCTL_MINORSET(minorversset, i);
+					NFSCTL_MINORUNSET(minorvers, i);
+					if (minorvers != 0)
+						break;
+				} else {
+					minorvers = 0;
+					minorversset = minormask;
 				}
+				/* FALLTHRU */
 			case 3:
 			case 2:
 				NFSCTL_VERUNSET(versbits, c);
@@ -201,14 +213,15 @@ main(int argc, char **argv)
 			case 4:
 				if (*p == '.') {
 					int i = atoi(p+1);
-					if (i < NFS4_MINMINOR || i > NFS4_MAXMINOR) {
+					if (i < 0 || i > NFS4_MAXMINOR) {
 						fprintf(stderr, "%s: unsupported minor version\n", optarg);
 						exit(1);
 					}
-					NFSCTL_VERSET(minorversset, i);
-					NFSCTL_VERSET(minorvers, i);
-					break;
-				}
+					NFSCTL_MINORSET(minorversset, i);
+					NFSCTL_MINORSET(minorvers, i);
+				} else
+					minorvers = minorversset = minormask;
+				/* FALLTHRU */
 			case 3:
 			case 2:
 				NFSCTL_VERSET(versbits, c);
@@ -222,8 +235,14 @@ main(int argc, char **argv)
 			xlog_syslog(1);
 			xlog_stderr(0);
 			break;
+		case 't':
+			NFSCTL_TCPSET(protobits);
+			break;
 		case 'T':
 			NFSCTL_TCPUNSET(protobits);
+			break;
+		case 'u':
+			NFSCTL_UDPSET(protobits);
 			break;
 		case 'U':
 			NFSCTL_UDPUNSET(protobits);
@@ -244,6 +263,7 @@ main(int argc, char **argv)
 			break;
 		default:
 			fprintf(stderr, "Invalid argument: '%c'\n", c);
+			/* FALLTHRU */
 		case 'h':
 			usage(progname);
 		}
@@ -372,9 +392,9 @@ usage(const char *prog)
 {
 	fprintf(stderr, "Usage:\n"
 		"%s [-d|--debug] [-H hostname] [-p|-P|--port port]\n"
-		"     [-N|--no-nfs-version version] [-V|--nfs-version version]\n"
-		"     [-s|--syslog] [-T|--no-tcp] [-U|--no-udp] [-r|--rdma=]\n"
-		"     [-G|--grace-time secs] [-L|--leasetime secs] nrservs\n",
+		"   [-N|--no-nfs-version version] [-V|--nfs-version version]\n"
+		"   [-s|--syslog] [-t|--tcp] [-T|--no-tcp] [-u|--udp] [-U|--no-udp]\n"
+		"   [-r|--rdma=] [-G|--grace-time secs] [-L|--leasetime secs] nrservs\n",
 		prog);
 	exit(2);
 }

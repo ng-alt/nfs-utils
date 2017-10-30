@@ -30,6 +30,10 @@
  * This code was written under funding by Ericsson Radio Systems.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <sys/param.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -52,9 +56,11 @@
 #pragma GCC visibility push(hidden)
 
 static void conf_load_defaults(void);
-static int conf_load(int trans, char *path);
-static int conf_set(int , char *, char *, char *, 
-	char *, int , int );
+static char * conf_load(const char *path);
+static int conf_set(int , const char *, const char *, const char *, 
+	const char *, int , int );
+static void conf_parse(int trans, char *buf, 
+	char **section, char **subsection);
 
 struct conf_trans {
 	TAILQ_ENTRY (conf_trans) link;
@@ -73,8 +79,10 @@ TAILQ_HEAD (conf_trans_head, conf_trans) conf_trans_queue;
 /*
  * Radix-64 Encoding.
  */
+#if 0
 static const uint8_t bin2asc[]
   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+#endif
 
 static const uint8_t asc2bin[] =
 {
@@ -105,11 +113,10 @@ struct conf_binding {
   int is_default;
 };
 
-char *conf_path;
 LIST_HEAD (conf_bindings, conf_binding) conf_bindings[256];
 
 static __inline__ uint8_t
-conf_hash(char *s)
+conf_hash(const char *s)
 {
 	uint8_t hash = 0;
 
@@ -124,7 +131,7 @@ conf_hash(char *s)
  * Insert a tag-value combination from LINE (the equal sign is at POS)
  */
 static int
-conf_remove_now(char *section, char *tag)
+conf_remove_now(const char *section, const char *tag)
 {
 	struct conf_binding *cb, *next;
 
@@ -147,7 +154,7 @@ conf_remove_now(char *section, char *tag)
 }
 
 static int
-conf_remove_section_now(char *section)
+conf_remove_section_now(const char *section)
 {
   struct conf_binding *cb, *next;
   int unseen = 1;
@@ -174,8 +181,8 @@ conf_remove_section_now(char *section)
  * into SECTION of our configuration database.
  */
 static int
-conf_set_now(char *section, char *arg, char *tag, 
-	char *value, int override, int is_default)
+conf_set_now(const char *section, const char *arg, const char *tag, 
+	const char *value, int override, int is_default)
 {
 	struct conf_binding *node = 0;
 
@@ -199,7 +206,6 @@ conf_set_now(char *section, char *arg, char *tag,
 	node->tag = strdup(tag);
 	node->value = strdup(value);
 	node->is_default = is_default;
-
 	LIST_INSERT_HEAD(&conf_bindings[conf_hash (section)], node, link);
 	return 0;
 }
@@ -209,17 +215,10 @@ conf_set_now(char *section, char *arg, char *tag,
  * headers and feed tag-value pairs into our configuration database.
  */
 static void
-conf_parse_line(int trans, char *line, size_t sz)
+conf_parse_line(int trans, char *line, int lineno, char **section, char **subsection)
 {
 	char *val, *ptr;
-	size_t i;
-	size_t j;
-	static char *section = 0;
-	static char *arg = 0;
-	static int ln = 0;
 
-	/* Lines starting with '#' or ';' are comments.  */
-	ln++;
 	/* Ignore blank lines */
 	if (*line == '\0')
 		return;
@@ -228,123 +227,188 @@ conf_parse_line(int trans, char *line, size_t sz)
 	while (isblank(*line)) 
 		line++;
 
+	/* Lines starting with '#' or ';' are comments.  */
 	if (*line == '#' || *line == ';')
 		return;
 
 	/* '[section]' parsing...  */
 	if (*line == '[') {
 		line++;
+
+		if (*section) {
+			free(*section);
+			*section = NULL;
+		}
+		if (*subsection) {
+			free(*subsection);
+			*subsection = NULL;
+		}
+
 		/* Strip off any blanks after '[' */
 		while (isblank(*line)) 
 			line++;
-		for (i = 0; i < sz; i++) {
-			if (line[i] == ']') {
-				break;
-			}
-		}
-		if (section)
-			free(section);
-		if (i == sz) {
+
+		/* find the closing ] */
+		ptr = strchr(line, ']');
+		if (ptr == NULL) {
 			xlog_warn("config file error: line %d: "
- 				"non-matched ']', ignoring until next section", ln);
-			section = 0;
+ 				"non-matched ']', ignoring until next section", lineno);
 			return;
 		}
+
+		/* just ignore everything after the closing ] */
+		*(ptr--) = '\0';
+
 		/* Strip off any blanks before ']' */
-		val = line;
-		j=0;
-		while (*val && !isblank(*val)) 
-			val++, j++;
-		if (*val)
-			i = j;
-		section = malloc(i+1);
-		if (!section) {
-			xlog_warn("conf_parse_line: %d: malloc (%lu) failed", ln,
-						(unsigned long)i);
+		while (ptr >= line && isblank(*ptr)) 
+			*(ptr--)='\0';
+
+		/* look for an arg to split from the section name */
+		val = strchr(line, '"');
+		if (val != NULL) {
+			ptr = val - 1;
+			*(val++) = '\0';
+
+			/* trim away any whitespace before the " */
+			while (ptr > line && isblank(*ptr))
+				*(ptr--)='\0';
+		}
+
+		/* copy the section name */
+		*section = strdup(line);
+		if (!*section) {
+			xlog_warn("conf_parse_line: %d: malloc failed", lineno);
 			return;
 		}
-		strncpy(section, line, i);
-		section[i] = '\0';
 
-		if (arg) 
-			free(arg);
-		arg = 0;
+		/* there is no arg, we are done */
+		if (val == NULL) return;
 
+		/* check for the closing " */
 		ptr = strchr(val, '"');
-		if (ptr == NULL)
-			return;
-		line = ++ptr;
-		while (*ptr && *ptr != '"' && *ptr != ']')
-			ptr++;
-		if (*ptr == '\0' || *ptr == ']') {
+		if (ptr == NULL) {
 			xlog_warn("config file error: line %d: "
- 				"non-matched '\"', ignoring until next section", ln);
-		}  else {
-			*ptr = '\0';
-			arg = strdup(line);
-			if (!arg) 
-				xlog_warn("conf_parse_line: %d: malloc arg failed", ln);
+ 				"non-matched '\"', ignoring until next section", lineno);
+			return;
 		}
+		*ptr = '\0';
+		*subsection = strdup(val);
+		if (!*subsection) 
+			xlog_warn("conf_parse_line: %d: malloc arg failed", lineno);
 		return;
 	}
 
 	/* Deal with assignments.  */
-	for (i = 0; i < sz; i++) {
-		if (line[i] == '=') {
-			/* If no section, we are ignoring the lines.  */
-			if (!section) {
-			xlog_warn("config file error: line %d: "
-				"ignoring line due to no section", ln);
-				return;
-			}
-			line[strcspn (line, " \t=")] = '\0';
-			val = line + i + 1 + strspn (line + i + 1, " \t");
+	ptr = strchr(line, '=');
 
-			if (val[0] == '"') {
-				val ++;
-				j = strcspn(val, "\"");
-				val[j] = 0;
-			} else if (val[0] == '\'') {
-				val ++;
-				j = strcspn(val, "'");
-				val[j] = 0;
-			} else {
-				/* Skip trailing spaces and comments */
-				for (j = 0; val[j]; j++) {
-					if ((val[j] == '#' || val[j] == ';')
-					    && (j == 0 || isspace(val[j-1]))) {
-						val[j] = '\0';
-						break;
-					}
-				}
-				while (j && isspace(val[j-1]))
-					val[--j] = '\0';
-			}
-			if (strcasecmp(line, "include") == 0)
-				conf_load(trans, val);
-			else
-				/* XXX Perhaps should we not ignore errors?  */
-				conf_set(trans, section, arg, line, val, 0, 0);
+	/* not an assignment line */
+	if (ptr == NULL) {
+		/* Other non-empty lines are weird.  */
+		if (line[strspn(line, " \t")])
+			xlog_warn("config file error: line %d: "
+				"line not empty and not an assignment", lineno);
+		return;
+	}
+
+	/* If no section, we are ignoring the line.  */
+	if (!*section) {
+		xlog_warn("config file error: line %d: "
+			"ignoring line due to no section", lineno);
+		return;
+	}
+
+	val = ptr + 1;
+	*(ptr--) = '\0';
+
+	/* strip spaces before and after the = */
+	while (ptr >= line && isblank(*ptr))
+		*(ptr--)='\0';
+	while (*val != '\0' && isblank(*val))
+		val++;
+
+	if (*val == '"') {
+		val++;
+		ptr = strchr(val, '"');
+		if (ptr == NULL) {
+			xlog_warn("config file error: line %d: "
+				"unmatched quotes", lineno);
 			return;
 		}
-	}
-	/* Other non-empty lines are weird.  */
-	i = strspn(line, " \t");
-	if (line[i])
-		xlog_warn("config file error: line %d:", ln);
+		*ptr = '\0';
+	} else
+	if (*val == '\'') {
+		val++;
+		ptr = strchr(val, '\'');
+		if (ptr == NULL) {
+			xlog_warn("config file error: line %d: "
+				"unmatched quotes", lineno);
+			return;
+		}
+		*ptr = '\0';
+	} else {
+		/* Trim any trailing spaces and comments */
+		if ((ptr=strchr(val, '#'))!=NULL)
+			*ptr = '\0';
+		if ((ptr=strchr(val, ';'))!=NULL)
+			*ptr = '\0';
 
-	return;
+		ptr = val + strlen(val) - 1;
+		while (ptr > val && isspace(*ptr))
+			*(ptr--) = '\0';
+	}
+
+	if (*line == '\0') {
+		xlog_warn("config file error: line %d: "
+			"missing tag in assignment", lineno);
+		return;
+	}
+	if (*val == '\0') {
+		xlog_warn("config file error: line %d: "
+			"missing value in assignment", lineno);
+		return;
+	}
+
+	if (strcasecmp(line, "include")==0) {
+		/* load and parse subordinate config files */
+		char * subconf = conf_load(val);
+		if (subconf == NULL) {
+			xlog_warn("config file error: line %d: "
+			"error loading included config", lineno);
+			return;
+		}
+
+		/* copy the section data so the included file can inherit it
+		 * without accidentally changing it for us */
+		char * inc_section = NULL;
+		char * inc_subsection = NULL;
+		if (*section != NULL) {
+			inc_section = strdup(*section);
+			if (*subsection != NULL)
+				inc_subsection = strdup(*subsection);
+		}
+
+		conf_parse(trans, subconf, &inc_section, &inc_subsection);
+
+		if (inc_section) free(inc_section);
+		if (inc_subsection) free(inc_subsection);
+		free(subconf);
+	} else {
+		/* XXX Perhaps should we not ignore errors?  */
+		conf_set(trans, *section, *subsection, line, val, 0, 0);
+	}
 }
 
 /* Parse the mapped configuration file.  */
 static void
-conf_parse(int trans, char *buf, size_t sz)
+conf_parse(int trans, char *buf, char **section, char **subsection)
 {
 	char *cp = buf;
-	char *bufend = buf + sz;
+	char *bufend = NULL;
 	char *line;
+	int lineno = 0;
 
 	line = cp;
+	bufend = buf + strlen(buf);
 	while (cp < bufend) {
 		if (*cp == '\n') {
 			/* Check for escaped newlines.  */
@@ -352,7 +416,8 @@ conf_parse(int trans, char *buf, size_t sz)
 				*(cp - 1) = *cp = ' ';
 			else {
 				*cp = '\0';
-				conf_parse_line(trans, line, cp - line);
+				lineno++;
+				conf_parse_line(trans, line, lineno, section, subsection);
 				line = cp + 1;
 			}
 		}
@@ -369,33 +434,21 @@ conf_load_defaults(void)
 	return;
 }
 
-void
-conf_init (void)
-{
-	unsigned int i;
-
-	for (i = 0; i < sizeof conf_bindings / sizeof conf_bindings[0]; i++)
-		LIST_INIT (&conf_bindings[i]);
-
-	TAILQ_INIT (&conf_trans_queue);
-	conf_reinit();
-}
-
-static int
-conf_load(int trans, char *path)
+static char *
+conf_load(const char *path)
 {
 	struct stat sb;
 	if ((stat (path, &sb) == 0) || (errno != ENOENT)) {
-		char *new_conf_addr;
+		char *new_conf_addr = NULL;
 		size_t sz = sb.st_size;
 		int fd = open (path, O_RDONLY, 0);
 
 		if (fd == -1) {
 			xlog_warn("conf_reinit: open (\"%s\", O_RDONLY) failed", path);
-			return -1;
+			return NULL;
 		}
 
-		new_conf_addr = malloc(sz);
+		new_conf_addr = malloc(sz+1);
 		if (!new_conf_addr) {
 			xlog_warn("conf_reinit: malloc (%lu) failed", (unsigned long)sz);
 			goto fail;
@@ -410,40 +463,101 @@ conf_load(int trans, char *path)
 		close(fd);
 
 		/* XXX Should we not care about errors and rollback?  */
-		conf_parse(trans, new_conf_addr, sz);
-		free(new_conf_addr);
-		return 0;
+		new_conf_addr[sz] = '\0';
+		return new_conf_addr;
 	fail:
 		close(fd);
-		free(new_conf_addr);
+		if (new_conf_addr) free(new_conf_addr);
 	}
-	return -1;
+	return NULL;
+}
+
+/* remove and free up any existing config state */
+static void conf_free_bindings(void)
+{
+	unsigned int i;
+	for (i = 0; i < sizeof conf_bindings / sizeof conf_bindings[0]; i++) {
+		struct conf_binding *cb, *next;
+
+		cb = LIST_FIRST(&conf_bindings[i]);
+		for (; cb; cb = next) {
+			next = LIST_NEXT(cb, link);
+			LIST_REMOVE(cb, link);
+			free(cb->section);
+			free(cb->arg);
+			free(cb->tag);
+			free(cb->value);
+			free(cb);
+		}
+		LIST_INIT(&conf_bindings[i]);
+	}
 }
 
 /* Open the config file and map it into our address space, then parse it.  */
-void
-conf_reinit(void)
+static void
+conf_reinit(const char *conf_file)
 {
-	struct conf_binding *cb = 0;
 	int trans;
-	unsigned int i;
+	char * conf_data;
 
 	trans = conf_begin();
-	if (conf_load(trans, conf_path) < 0)
+	conf_data = conf_load(conf_file);
+
+	if (conf_data == NULL)
 		return;
 
 	/* Load default configuration values.  */
 	conf_load_defaults();
 
-	/* Free potential existing configuration.  */
-	for (i = 0; i < sizeof conf_bindings / sizeof conf_bindings[0]; i++) {
-		cb = LIST_FIRST (&conf_bindings[i]);
-		for (; cb; cb = LIST_FIRST (&conf_bindings[i]))
-			conf_remove_now(cb->section, cb->tag);
-	}
+	/* Parse config contents into the transaction queue */
+	char *section = NULL;
+	char *subsection = NULL;
+	conf_parse(trans, conf_data, &section, &subsection);
+	if (section) free(section);
+	if (subsection) free(subsection);
+	free(conf_data);
 
+	/* Free potential existing configuration.  */
+	conf_free_bindings();
+
+	/* Apply the new configuration values */
 	conf_end(trans, 1);
 	return;
+}
+
+void
+conf_init (const char *conf_file)
+{
+	unsigned int i;
+
+	for (i = 0; i < sizeof conf_bindings / sizeof conf_bindings[0]; i++)
+		LIST_INIT (&conf_bindings[i]);
+
+	TAILQ_INIT (&conf_trans_queue);
+
+	if (conf_file == NULL) conf_file=NFS_CONFFILE;
+	conf_reinit(conf_file);
+}
+
+/* 
+ * Empty the config and free up any used memory 
+ */
+void
+conf_cleanup(void)
+{
+	conf_free_bindings();
+
+	struct conf_trans *node, *next;
+	for (node = TAILQ_FIRST(&conf_trans_queue); node; node = next) {
+		next = TAILQ_NEXT(node, link);
+		TAILQ_REMOVE (&conf_trans_queue, node, link);
+		if (node->section) free(node->section);
+		if (node->arg) free(node->arg);
+		if (node->tag) free(node->tag);
+		if (node->value) free(node->value);
+		free (node);
+	}
+	TAILQ_INIT(&conf_trans_queue);
 }
 
 /*
@@ -451,7 +565,7 @@ conf_reinit(void)
  * if that tag does not exist.
  */
 int
-conf_get_num(char *section, char *tag, int def)
+conf_get_num(const char *section, const char *tag, int def)
 {
 	char *value = conf_get_str(section, tag);
 
@@ -469,7 +583,7 @@ conf_get_num(char *section, char *tag, int def)
  * A failure to match one of these results in DEF
  */
 _Bool
-conf_get_bool(char *section, char *tag, _Bool def)
+conf_get_bool(const char *section, const char *tag, _Bool def)
 {
 	char *value = conf_get_str(section, tag);
 
@@ -495,7 +609,7 @@ conf_get_bool(char *section, char *tag, _Bool def)
 
 /* Validate X according to the range denoted by TAG in section SECTION.  */
 int
-conf_match_num(char *section, char *tag, int x)
+conf_match_num(const char *section, const char *tag, int x)
 {
 	char *value = conf_get_str (section, tag);
 	int val, min, max, n;
@@ -520,38 +634,31 @@ conf_match_num(char *section, char *tag, int x)
 
 /* Return the string value denoted by TAG in section SECTION.  */
 char *
-conf_get_str(char *section, char *tag)
+conf_get_str(const char *section, const char *tag)
 {
-	struct conf_binding *cb;
-retry:
-	cb = LIST_FIRST (&conf_bindings[conf_hash (section)]);
-	for (; cb; cb = LIST_NEXT (cb, link)) {
-		if (strcasecmp (section, cb->section) == 0
-		    && strcasecmp (tag, cb->tag) == 0) {
-			if (cb->value[0] == '$') {
-				/* expand $name from [environment] section,
-				 * or from environment
-				 */
-				char *env = getenv(cb->value+1);
-				if (env)
-					return env;
-				section = "environment";
-				tag = cb->value + 1;
-				goto retry;
-			}
-			return cb->value;
-		}
-	}
-	return 0;
+	return conf_get_section(section, NULL, tag);
 }
+
+/* Return the string value denoted by TAG in section SECTION,
+ * unless it is not set, in which case return def
+ */
+char *
+conf_get_str_with_def(const char *section, const char *tag, char *def)
+{
+	char * result = conf_get_section(section, NULL, tag);
+	if (!result) 
+		return def;
+	return result;
+}
+
 /*
  * Find a section that may or may not have an argument
  */
 char *
-conf_get_section(char *section, char *arg, char *tag)
+conf_get_section(const char *section, const char *arg, const char *tag)
 {
 	struct conf_binding *cb;
-
+retry:
 	cb = LIST_FIRST (&conf_bindings[conf_hash (section)]);
 	for (; cb; cb = LIST_NEXT (cb, link)) {
 		if (strcasecmp(section, cb->section) != 0)
@@ -560,6 +667,17 @@ conf_get_section(char *section, char *arg, char *tag)
 			continue;
 		if (strcasecmp(tag, cb->tag) != 0)
 			continue;
+		if (cb->value[0] == '$') {
+			/* expand $name from [environment] section,
+			 * or from environment
+			 */
+			char *env = getenv(cb->value+1);
+			if (env && *env)
+				return env;
+			section = "environment";
+			tag = cb->value + 1;
+			goto retry;
+		}
 		return cb->value;
 	}
 	return 0;
@@ -570,7 +688,7 @@ conf_get_section(char *section, char *arg, char *tag)
  * TAG in SECTION.
  */
 struct conf_list *
-conf_get_list(char *section, char *tag)
+conf_get_list(const char *section, const char *tag)
 {
 	char *liststr = 0, *p, *field, *t;
 	struct conf_list *list = 0;
@@ -624,7 +742,7 @@ cleanup:
 }
 
 struct conf_list *
-conf_get_tag_list(char *section, char *arg)
+conf_get_tag_list(const char *section, const char *arg)
 {
 	struct conf_list *list = 0;
 	struct conf_list_node *node;
@@ -662,7 +780,7 @@ cleanup:
 
 /* Decode a PEM encoded buffer.  */
 int
-conf_decode_base64 (uint8_t *out, uint32_t *len, unsigned char *buf)
+conf_decode_base64 (uint8_t *out, uint32_t *len, const unsigned char *buf)
 {
 	uint32_t c = 0;
 	uint8_t c1, c2, c3, c4;
@@ -759,8 +877,8 @@ conf_trans_node(int transaction, enum conf_op op)
 
 /* Queue a set operation.  */
 static int
-conf_set(int transaction, char *section, char *arg,
-	char *tag, char *value, int override, int is_default)
+conf_set(int transaction, const char *section, const char *arg,
+	const char *tag, const char *value, int override, int is_default)
 {
 	struct conf_trans *node;
 
@@ -812,7 +930,7 @@ fail:
 
 /* Queue a remove operation.  */
 int
-conf_remove(int transaction, char *section, char *tag)
+conf_remove(int transaction, const char *section, const char *tag)
 {
 	struct conf_trans *node;
 
@@ -841,7 +959,7 @@ fail:
 
 /* Queue a remove section operation.  */
 int
-conf_remove_section(int transaction, char *section)
+conf_remove_section(int transaction, const char *section)
 {
 	struct conf_trans *node;
 

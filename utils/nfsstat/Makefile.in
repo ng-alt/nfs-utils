@@ -98,7 +98,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -118,7 +117,7 @@ PROGRAMS = $(sbin_PROGRAMS)
 am_nfsstat_OBJECTS = nfsstat.$(OBJEXT)
 nfsstat_OBJECTS = $(am_nfsstat_OBJECTS)
 nfsstat_DEPENDENCIES = ../../support/export/libexport.a \
-	../../support/nfs/libnfs.a ../../support/misc/libmisc.a
+	../../support/nfs/libnfs.la ../../support/misc/libmisc.a
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -284,7 +283,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@
@@ -404,7 +402,7 @@ man8_MANS = nfsstat.man
 EXTRA_DIST = $(man8_MANS)
 nfsstat_SOURCES = nfsstat.c
 nfsstat_LDADD = ../../support/export/libexport.a \
-	      	../../support/nfs/libnfs.a \
+	      	../../support/nfs/libnfs.la \
 		../../support/misc/libmisc.a
 
 MAINTAINERCLEANFILES = Makefile.in

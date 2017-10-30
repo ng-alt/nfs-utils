@@ -33,6 +33,8 @@ support/include/config.h
 support/include/stamp-h1
 # file generated during compilation
 *.o
+*.lo
+*.la
 .libs
 lib*.a
 test-driver
@@ -70,6 +72,7 @@ tests/nsm_client/nlm_sm_inter_svc.c
 tests/nsm_client/nlm_sm_inter_xdr.c
 utils/nfsidmap/nfsidmap
 systemd/nfs-server-generator
+systemd/rpc-pipefs-generator
 systemd/nfs-config.service
 systemd/rpc-gssd.service
 # cscope database files

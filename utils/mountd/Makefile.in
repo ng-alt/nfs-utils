@@ -99,7 +99,6 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libblkid.m4 \
 	$(top_srcdir)/aclocal/libcap.m4 \
 	$(top_srcdir)/aclocal/libevent.m4 \
-	$(top_srcdir)/aclocal/libnfsidmap.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
@@ -125,7 +124,7 @@ am_mountd_OBJECTS = mountd-mountd.$(OBJEXT) \
 mountd_OBJECTS = $(am_mountd_OBJECTS)
 am__DEPENDENCIES_1 =
 mountd_DEPENDENCIES = ../../support/export/libexport.a \
-	../../support/nfs/libnfs.a ../../support/misc/libmisc.a \
+	../../support/nfs/libnfs.la ../../support/misc/libmisc.a \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
@@ -295,7 +294,6 @@ LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
-LIBNFSIDMAP = @LIBNFSIDMAP@
 LIBNSL = @LIBNSL@
 LIBOBJS = @LIBOBJS@
 LIBPTHREAD = @LIBPTHREAD@
@@ -420,7 +418,7 @@ mountd_SOURCES = mountd.c mount_dispatch.c auth.c rmtab.c cache.c \
 		 svc_run.c fsloc.c v4root.c mountd.h
 
 mountd_LDADD = ../../support/export/libexport.a \
-	       ../../support/nfs/libnfs.a \
+	       ../../support/nfs/libnfs.la \
 	       ../../support/misc/libmisc.a \
 	       $(LIBBSD) $(LIBWRAP) $(LIBNSL) $(LIBBLKID) $(LIBDL) $(LIBTIRPC)
 

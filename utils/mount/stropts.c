@@ -73,6 +73,13 @@
 #define NFS_DEF_BG_TIMEOUT_MINUTES	(10000u)
 #endif
 
+#ifndef NFS_DEFAULT_MAJOR
+#define NFS_DEFAULT_MAJOR	4
+#endif
+#ifndef NFS_DEFAULT_MINOR
+#define NFS_DEFAULT_MINOR	2
+#endif
+
 extern int nfs_mount_data_version;
 extern char *progname;
 extern int verbose;
@@ -80,8 +87,8 @@ extern int sloppy;
 
 struct nfsmount_info {
 	const char		*spec,		/* server:/path */
-				*node,		/* mounted-on dir */
-				*type;		/* "nfs" or "nfs4" */
+				*node;		/* mounted-on dir */
+	char			*type;		/* "nfs" or "nfs4" */
 	char			*hostname;	/* server's hostname */
 	struct addrinfo		*address;	/* server's addresses */
 	sa_family_t		family;		/* Address family */
@@ -112,20 +119,28 @@ static void nfs_default_version(struct nfsmount_info *mi)
 	if (mi->version.v_mode == V_DEFAULT &&
 		config_default_vers.v_mode != V_DEFAULT) {
 		mi->version.major = config_default_vers.major;
-		mi->version.minor = config_default_vers.minor;
+		if (config_default_vers.v_mode == V_SPECIFIC)
+			mi->version.minor = config_default_vers.minor;
+		else
+			mi->version.minor = NFS_DEFAULT_MINOR;
 		return;
 	}
 
 	if (mi->version.v_mode == V_GENERAL) {
 		if (config_default_vers.v_mode != V_DEFAULT &&
-		    mi->version.major == config_default_vers.major)
-			mi->version.minor = config_default_vers.minor;
+		    mi->version.major == config_default_vers.major) {
+			if (config_default_vers.v_mode == V_SPECIFIC)
+				mi->version.minor = config_default_vers.minor;
+			else
+				mi->version.minor = NFS_DEFAULT_MINOR;
+		} else
+			mi->version.minor = NFS_DEFAULT_MINOR;
 		return;
 	}
 
 #endif /* MOUNT_CONFIG */
-	mi->version.major = 4;
-	mi->version.minor = 2;
+	mi->version.major = NFS_DEFAULT_MAJOR;
+	mi->version.minor = NFS_DEFAULT_MINOR;
 }
 
 /*
@@ -312,11 +327,8 @@ static int nfs_append_sloppy_option(struct mount_options *options)
 
 static int nfs_set_version(struct nfsmount_info *mi)
 {
-	if (!nfs_nfs_version(mi->options, &mi->version))
+	if (!nfs_nfs_version(mi->type, mi->options, &mi->version))
 		return 0;
-
-	if (strncmp(mi->type, "nfs4", 4) == 0)
-		mi->version.major = 4;
 
 	/*
 	 * Before 2.6.32, the kernel NFS client didn't
@@ -517,6 +529,10 @@ nfs_rewrite_pmap_mount_options(struct mount_options *options, int checkv4)
 	unsigned long protocol;
 	struct pmap mnt_pmap;
 
+	/* initialize structs */
+	memset(&nfs_pmap, 0, sizeof(struct pmap));
+	memset(&mnt_pmap, 0, sizeof(struct pmap));
+
 	/*
 	 * Version and transport negotiation is not required
 	 * and does not work for RDMA mounts.
@@ -705,7 +721,7 @@ static int nfs_do_mount_v4(struct nfsmount_info *mi,
 {
 	struct mount_options *options = po_dup(mi->options);
 	int result = 0;
-	char version_opt[16];
+	char version_opt[32];
 	char *extra_opts = NULL;
 
 	if (!options) {
@@ -727,13 +743,25 @@ static int nfs_do_mount_v4(struct nfsmount_info *mi,
 	}
 
 	if (mi->version.v_mode != V_SPECIFIC) {
-		if (mi->version.v_mode == V_GENERAL)
-			snprintf(version_opt, sizeof(version_opt) - 1,
-				"vers=%lu", mi->version.major);
-		else
-			snprintf(version_opt, sizeof(version_opt) - 1,
-				"vers=%lu.%lu", mi->version.major,
-				mi->version.minor);
+		char *fmt;
+		switch (mi->version.minor) {
+			/* Old kernels don't support the new "vers=x.y"
+			 * option, but do support old versions of NFS4.
+			 * So use the format that is most widely understood.
+			 */
+		case 0:
+			fmt = "vers=%lu";
+			break;
+		case 1:
+			fmt = "vers=%lu,minorversion=%lu";
+			break;
+		default:
+			fmt = "vers=%lu.%lu";
+			break;
+		}
+		snprintf(version_opt, sizeof(version_opt) - 1,
+			fmt, mi->version.major,
+			mi->version.minor);
 
 		if (po_append(options, version_opt) == PO_FAILED) {
 			errno = EINVAL;
@@ -834,9 +862,9 @@ check_result:
 	case EINVAL:
 		/* A less clear indication that our client
 		 * does not support NFSv4 minor version. */
-		if (mi->version.v_mode == V_GENERAL &&
-			mi->version.minor == 0)
-				return result;
+	case EACCES:
+		/* An unclear indication that the server
+		 * may not support NFSv4 minor version. */
 		if (mi->version.v_mode != V_SPECIFIC) {
 			if (mi->version.minor > 0) {
 				mi->version.minor--;
@@ -858,19 +886,28 @@ check_result:
 		/* UDP-Only servers won't support v4, but maybe it
 		 * just isn't ready yet.  So try v3, but double-check
 		 * with rpcbind for v4. */
+		if (mi->version.v_mode == V_GENERAL)
+			/* Mustn't try v2,v3 */
+			return result;
 		result = nfs_try_mount_v3v2(mi, TRUE);
 		if (result == 0 && errno == EAGAIN) {
 			/* v4 server seems to be registered now. */
 			result = nfs_try_mount_v4(mi);
 			if (result == 0 && errno != ECONNREFUSED)
 				goto check_result;
-		}
+		} else if (result == 0)
+			/* Restore original errno with v3 failures */
+			errno = ECONNREFUSED;
+
 		return result;
 	default:
 		return result;
 	}
 
 fall_back:
+	if (mi->version.v_mode == V_GENERAL)
+		/* v2,3 fallback not allowed */
+		return result;
 	return nfs_try_mount_v3v2(mi, FALSE);
 }
 
@@ -1165,7 +1202,7 @@ static int nfsmount_start(struct nfsmount_info *mi)
  *
  * Returns a valid mount command exit code.
  */
-int nfsmount_string(const char *spec, const char *node, const char *type,
+int nfsmount_string(const char *spec, const char *node, char *type,
 		    int flags, char **extra_opts, int fake, int child)
 {
 	struct nfsmount_info mi = {
