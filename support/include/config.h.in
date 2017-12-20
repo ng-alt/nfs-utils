@@ -210,6 +210,9 @@
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
 
+/* Bundled lib always has the `nfs4_set_debug' function. */
+#undef HAVE_NFS4_SET_DEBUG
+
 /* Define to 1 if you have the <nfs-plugin.h> header file. */
 #undef HAVE_NFS_PLUGIN_H
 

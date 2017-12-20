@@ -56,7 +56,7 @@
 #pragma GCC visibility push(hidden)
 
 static void conf_load_defaults(void);
-static char * conf_load(const char *path);
+static char * conf_readfile(const char *path);
 static int conf_set(int , const char *, const char *, const char *, 
 	const char *, int , int );
 static void conf_parse(int trans, char *buf, 
@@ -79,10 +79,6 @@ TAILQ_HEAD (conf_trans_head, conf_trans) conf_trans_queue;
 /*
  * Radix-64 Encoding.
  */
-#if 0
-static const uint8_t bin2asc[]
-  = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-#endif
 
 static const uint8_t asc2bin[] =
 {
@@ -370,7 +366,7 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 
 	if (strcasecmp(line, "include")==0) {
 		/* load and parse subordinate config files */
-		char * subconf = conf_load(val);
+		char * subconf = conf_readfile(val);
 		if (subconf == NULL) {
 			xlog_warn("config file error: line %d: "
 			"error loading included config", lineno);
@@ -435,7 +431,7 @@ conf_load_defaults(void)
 }
 
 static char *
-conf_load(const char *path)
+conf_readfile(const char *path)
 {
 	struct stat sb;
 	if ((stat (path, &sb) == 0) || (errno != ENOENT)) {
@@ -444,19 +440,19 @@ conf_load(const char *path)
 		int fd = open (path, O_RDONLY, 0);
 
 		if (fd == -1) {
-			xlog_warn("conf_reinit: open (\"%s\", O_RDONLY) failed", path);
+			xlog_warn("conf_readfile: open (\"%s\", O_RDONLY) failed", path);
 			return NULL;
 		}
 
 		new_conf_addr = malloc(sz+1);
 		if (!new_conf_addr) {
-			xlog_warn("conf_reinit: malloc (%lu) failed", (unsigned long)sz);
+			xlog_warn("conf_readfile: malloc (%lu) failed", (unsigned long)sz);
 			goto fail;
 		}
 
 		/* XXX I assume short reads won't happen here.  */
 		if (read (fd, new_conf_addr, sz) != (int)sz) {
-			xlog_warn("conf_reinit: read (%d, %p, %lu) failed",
+			xlog_warn("conf_readfile: read (%d, %p, %lu) failed",
 				fd, new_conf_addr, (unsigned long)sz);
 			goto fail;
 		}
@@ -495,13 +491,13 @@ static void conf_free_bindings(void)
 
 /* Open the config file and map it into our address space, then parse it.  */
 static void
-conf_reinit(const char *conf_file)
+conf_load_file(const char *conf_file)
 {
 	int trans;
 	char * conf_data;
 
 	trans = conf_begin();
-	conf_data = conf_load(conf_file);
+	conf_data = conf_readfile(conf_file);
 
 	if (conf_data == NULL)
 		return;
@@ -526,7 +522,7 @@ conf_reinit(const char *conf_file)
 }
 
 void
-conf_init (const char *conf_file)
+conf_init_file(const char *conf_file)
 {
 	unsigned int i;
 
@@ -536,7 +532,7 @@ conf_init (const char *conf_file)
 	TAILQ_INIT (&conf_trans_queue);
 
 	if (conf_file == NULL) conf_file=NFS_CONFFILE;
-	conf_reinit(conf_file);
+	conf_load_file(conf_file);
 }
 
 /* 

@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[2.2.1],[linux-nfs@vger.kernel.org],[nfs-utils])
+AC_INIT([linux nfs-utils],[3.1.1],[linux-nfs@vger.kernel.org],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_MACRO_DIR(aclocal)
@@ -440,6 +440,10 @@ if test -n "$path_plugins" ; then
                 [Define this to change the plugins path])
 fi
 AM_CONDITIONAL(PATH_PLUGINS, test -n "$path_plugins")
+
+AC_SUBST(AM_CPPFLAGS, "$AM_CPPFLAGS -I../../support/nfsidmap")
+AC_DEFINE([HAVE_NFS4_SET_DEBUG], 1,
+          [Bundled lib always has the `nfs4_set_debug' function.])
 
 dnl Check for IPv6 support
 AC_IPV6
