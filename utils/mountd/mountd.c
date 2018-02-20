@@ -80,10 +80,10 @@ static int nfs_version = -1;
 static void
 unregister_services (void)
 {
-	if (nfs_version & 0x1)
+	if (nfs_version & (0x1 << 1)) {
 		pmap_unset (MOUNTPROG, MOUNTVERS);
-	if (nfs_version & (0x1 << 1))
 		pmap_unset (MOUNTPROG, MOUNTVERS_POSIX);
+	}
 	if (nfs_version & (0x1 << 2))
 		pmap_unset (MOUNTPROG, MOUNTVERS_NFSV3);
 }
@@ -467,8 +467,12 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, nfs_export **expret,
 			return NULL;
 		}
 	} else {
-		if (exp->m_exported<1)
+		int did_export = 0;
+	retry:
+		if (exp->m_exported<1) {
 			export_export(exp);
+			did_export = 1;
+		}
 		if (!exp->m_xtabent)
 			xtab_append(exp);
 
@@ -482,6 +486,11 @@ get_rootfh(struct svc_req *rqstp, dirpath *path, nfs_export **expret,
 				fh = getfh_old ((struct sockaddr *) sin,
 						stb.st_dev, stb.st_ino);
 		}
+		if (fh == NULL && !did_export) {
+			exp->m_exported = 0;
+			goto retry;
+		}
+
 		if (fh == NULL) {
 			xlog(L_WARNING, "getfh failed: %s", strerror(errno));
 			*error = NFSERR_ACCES;
@@ -672,8 +681,10 @@ main(int argc, char **argv)
 			usage(argv [0], 1);
 		}
 
-	/* No more arguments allowed. */
-	if (optind != argc || !(nfs_version & 0x7))
+	/* No more arguments allowed.
+	 * Require at least one valid version (2, 3, or 4)
+	 */
+	if (optind != argc || !(nfs_version & 0xE))
 		usage(argv [0], 1);
 
 	if (chdir(state_dir)) {
