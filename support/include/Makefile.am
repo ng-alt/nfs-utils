@@ -6,6 +6,7 @@ noinst_HEADERS = \
 	cld.h \
 	exportfs.h \
 	ha-callout.h \
+	junction.h \
 	misc.h \
 	nfs_mntent.h \
 	nfs_paths.h \

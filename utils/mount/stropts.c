@@ -761,8 +761,25 @@ static int nfs_do_mount_v4(struct nfsmount_info *mi,
 			fmt = "vers=%lu.%lu";
 			break;
 		}
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 		snprintf(version_opt, sizeof(version_opt) - 1,
 			fmt, mi->version.major,
+			mi->version.minor);
+#pragma GCC diagnostic warning "-Wformat-nonliteral"
+
+		if (po_append(options, version_opt) == PO_FAILED) {
+			errno = EINVAL;
+			goto out_fail;
+		}
+	} else if (po_get(options, "minorversion") &&
+		linux_version_code() > MAKE_VERSION(3, 4, 0)) {
+		/*
+	 	 * convert minorversion= into vers=4.x
+	 	 */
+		po_remove_all(options, "minorversion");
+
+		snprintf(version_opt, sizeof(version_opt) - 1,
+			"vers=%lu.%lu", mi->version.major,
 			mi->version.minor);
 
 		if (po_append(options, version_opt) == PO_FAILED) {

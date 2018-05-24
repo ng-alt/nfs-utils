@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[3.1.1],[linux-nfs@vger.kernel.org],[nfs-utils])
+AC_INIT([linux nfs-utils],[2.3.2],[linux-nfs@vger.kernel.org],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_MACRO_DIR(aclocal)
@@ -180,6 +180,13 @@ else
 	enable_libmount=no
 fi
 
+AC_ARG_ENABLE(junction,
+	[AC_HELP_STRING([--enable-junction],
+			[enable support for NFS junctions @<:@default=no@:>@])],
+	enable_junction=$enableval,
+	enable_junction=no)
+AM_CONDITIONAL(CONFIG_JUNCTION, [test "$enable_junction" = "yes" ])
+
 AC_ARG_ENABLE(tirpc,
 	[AC_HELP_STRING([--disable-tirpc],
 			[disable use of TI-RPC library @<:@default=no@:>@])],
@@ -244,6 +251,9 @@ AC_LIBTIRPC
 dnl Check for -lcap
 AC_LIBCAP
 
+dnl Check for -lxml2
+AC_LIBXML2
+
 # Check whether user wants TCP wrappers support
 AC_TCP_WRAPPERS
 
@@ -297,8 +307,6 @@ AC_CHECK_FUNC([getservbyname], ,
               [AC_MSG_ERROR([Function 'getservbyname' not found.])])
 
 AC_CHECK_LIB([crypt], [crypt], [LIBCRYPT="-lcrypt"])
-
-AC_CHECK_LIB([dl], [dlclose], [LIBDL="-ldl"])
 
 if test "$enable_nfsv4" = yes; then
   dnl check for libevent libraries and headers
@@ -362,7 +370,6 @@ AC_SUBST(LIBSOCKET)
 AC_SUBST(LIBCRYPT)
 AC_SUBST(LIBBSD)
 AC_SUBST(LIBBLKID)
-AC_SUBST(LIBDL)
 
 if test "$enable_libmount" = yes; then
    AC_CHECK_LIB(mount, mnt_context_do_mount, [LIBMOUNT="-lmount"], AC_MSG_ERROR([libmount needed]))
@@ -441,7 +448,7 @@ if test -n "$path_plugins" ; then
 fi
 AM_CONDITIONAL(PATH_PLUGINS, test -n "$path_plugins")
 
-AC_SUBST(AM_CPPFLAGS, "$AM_CPPFLAGS -I../../support/nfsidmap")
+AC_SUBST(AM_CPPFLAGS, "$AM_CPPFLAGS")
 AC_DEFINE([HAVE_NFS4_SET_DEBUG], 1,
           [Bundled lib always has the `nfs4_set_debug' function.])
 
@@ -456,7 +463,7 @@ AC_CHECK_HEADERS([arpa/inet.h fcntl.h libintl.h limits.h \
                  stdlib.h string.h sys/file.h sys/ioctl.h sys/mount.h \
                  sys/param.h sys/socket.h sys/time.h sys/vfs.h \
                  syslog.h unistd.h com_err.h et/com_err.h \
-                 ifaddrs.h nfs-plugin.h libio.h])
+                 ifaddrs.h])
 
 dnl *************************************************************
 dnl Checks for typedefs, structures, and compiler characteristics
@@ -536,22 +543,46 @@ AC_SUBST(CXXFLAGS_FOR_BUILD)
 AC_SUBST(CPPFLAGS_FOR_BUILD)
 AC_SUBST(LDFLAGS_FOR_BUILD)
 
-dnl *************************************************************
-dnl Set up "global" CFLAGS
-dnl *************************************************************
-dnl Use architecture-specific compile flags
-dnl (We use $host and not $build in case we are cross-compiling)
-dnl *************************************************************
-dnl Note: we no longer have arch specific compile flags, but 
-dnl the stub is left here in case they are needed one day.
-case $host in
-  *)
-    ARCHFLAGS="" ;;
-esac
+my_am_cflags="\
+ -pipe \
+ -Wall \
+ -Wextra \
+ -Werror=strict-prototypes \
+ -Werror=missing-prototypes \
+ -Werror=missing-declarations \
+ -Werror=format=2 \
+ -Werror=undef \
+ -Werror=missing-include-dirs \
+ -Werror=strict-aliasing=2 \
+ -Werror=init-self \
+ -Werror=implicit-function-declaration \
+ -Werror=return-type \
+ -Werror=switch \
+ -Werror=overflow \
+ -Werror=parentheses \
+ -Werror=aggregate-return \
+ -Werror=unused-result \
+ -fno-strict-aliasing \
+"
 
-my_am_cflags="-Wall -Wextra -Wstrict-prototypes $ARCHFLAGS -pipe"
+AC_DEFUN([CHECK_CCSUPPORT], [
+  my_save_cflags="$CFLAGS"
+  CFLAGS=$1
+  AC_MSG_CHECKING([whether CC supports $1])
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
+    [AC_MSG_RESULT([yes])]
+    [$2+=$1],
+    [AC_MSG_RESULT([no])]
+  )
+  CFLAGS="$my_save_cflags"
+])
 
-AC_SUBST([AM_CFLAGS], ["$my_am_cflags"])
+CHECK_CCSUPPORT([-Werror=format-overflow=2], [flg1])
+CHECK_CCSUPPORT([-Werror=int-conversion], [flg2])
+CHECK_CCSUPPORT([-Werror=incompatible-pointer-types], [flg3])
+CHECK_CCSUPPORT([-Werror=misleading-indentation], [flg4])
+
+AC_SUBST([AM_CFLAGS], ["$my_am_cflags $flg1 $flg2 $flg3 $flg4"])
 
 # Make sure that $ACLOCAL_FLAGS are used during a rebuild
 AC_SUBST([ACLOCAL_AMFLAGS], ["-I $ac_macro_dir \$(ACLOCAL_FLAGS)"])
@@ -572,6 +603,7 @@ AC_CONFIG_FILES([
 	support/include/sys/fs/Makefile
 	support/include/sys/Makefile
 	support/include/Makefile
+	support/junction/Makefile
 	support/misc/Makefile
 	support/nfs/Makefile
 	support/nsm/Makefile
@@ -584,6 +616,7 @@ AC_CONFIG_FILES([
 	tools/rpcgen/Makefile
 	tools/mountstats/Makefile
 	tools/nfs-iostat/Makefile
+	tools/nfsconf/Makefile
 	utils/Makefile
 	utils/blkmapd/Makefile
 	utils/nfsdcltrack/Makefile
@@ -593,6 +626,7 @@ AC_CONFIG_FILES([
 	utils/mount/Makefile
 	utils/mountd/Makefile
 	utils/nfsd/Makefile
+	utils/nfsref/Makefile
 	utils/nfsstat/Makefile
 	utils/nfsidmap/Makefile
 	utils/showmount/Makefile

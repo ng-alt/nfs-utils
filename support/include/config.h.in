@@ -160,9 +160,6 @@
 /* Define to 1 if you have the <libintl.h> header file. */
 #undef HAVE_LIBINTL_H
 
-/* Define to 1 if you have the <libio.h> header file. */
-#undef HAVE_LIBIO_H
-
 /* Define to 1 if you have the `resolv' library (-lresolv). */
 #undef HAVE_LIBRESOLV
 
@@ -212,9 +209,6 @@
 
 /* Bundled lib always has the `nfs4_set_debug' function. */
 #undef HAVE_NFS4_SET_DEBUG
-
-/* Define to 1 if you have the <nfs-plugin.h> header file. */
-#undef HAVE_NFS_PLUGIN_H
 
 /* Define to 1 if you have the `pathconf' function. */
 #undef HAVE_PATHCONF

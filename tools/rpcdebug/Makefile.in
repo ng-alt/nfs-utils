@@ -101,6 +101,7 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
+	$(top_srcdir)/aclocal/libxml2.m4 \
 	$(top_srcdir)/aclocal/nfs-utils.m4 \
 	$(top_srcdir)/aclocal/rpcsec_vers.m4 \
 	$(top_srcdir)/aclocal/tcp-wrappers.m4 \
@@ -278,7 +279,6 @@ LIBBLKID = @LIBBLKID@
 LIBBSD = @LIBBSD@
 LIBCAP = @LIBCAP@
 LIBCRYPT = @LIBCRYPT@
-LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
@@ -291,6 +291,7 @@ LIBSQLITE = @LIBSQLITE@
 LIBTIRPC = @LIBTIRPC@
 LIBTOOL = @LIBTOOL@
 LIBWRAP = @LIBWRAP@
+LIBXML2 = @LIBXML2@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@

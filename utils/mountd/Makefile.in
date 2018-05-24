@@ -89,6 +89,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
+@CONFIG_JUNCTION_TRUE@am__append_1 = ../../support/junction/libjunction.la $(LIBXML2)
 sbin_PROGRAMS = mountd$(EXEEXT)
 subdir = utils/mountd
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -102,6 +103,7 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
+	$(top_srcdir)/aclocal/libxml2.m4 \
 	$(top_srcdir)/aclocal/nfs-utils.m4 \
 	$(top_srcdir)/aclocal/rpcsec_vers.m4 \
 	$(top_srcdir)/aclocal/tcp-wrappers.m4 \
@@ -123,9 +125,13 @@ am_mountd_OBJECTS = mountd-mountd.$(OBJEXT) \
 	mountd-v4root.$(OBJEXT)
 mountd_OBJECTS = $(am_mountd_OBJECTS)
 am__DEPENDENCIES_1 =
+@CONFIG_JUNCTION_TRUE@am__DEPENDENCIES_2 =  \
+@CONFIG_JUNCTION_TRUE@	../../support/junction/libjunction.la \
+@CONFIG_JUNCTION_TRUE@	$(am__DEPENDENCIES_1)
+am__DEPENDENCIES_3 = $(am__DEPENDENCIES_2)
 mountd_DEPENDENCIES = ../../support/export/libexport.a \
 	../../support/nfs/libnfs.la ../../support/misc/libmisc.a \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_3) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -290,7 +296,6 @@ LIBBLKID = @LIBBLKID@
 LIBBSD = @LIBBSD@
 LIBCAP = @LIBCAP@
 LIBCRYPT = @LIBCRYPT@
-LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
@@ -303,6 +308,7 @@ LIBSQLITE = @LIBSQLITE@
 LIBTIRPC = @LIBTIRPC@
 LIBTOOL = @LIBTOOL@
 LIBWRAP = @LIBWRAP@
+LIBXML2 = @LIBXML2@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
@@ -409,6 +415,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 unitdir = @unitdir@
+OPTLIBS = $(am__append_1)
 man8_MANS = mountd.man
 EXTRA_DIST = $(man8_MANS)
 RPCPREFIX = rpc.
@@ -420,7 +427,8 @@ mountd_SOURCES = mountd.c mount_dispatch.c auth.c rmtab.c cache.c \
 mountd_LDADD = ../../support/export/libexport.a \
 	       ../../support/nfs/libnfs.la \
 	       ../../support/misc/libmisc.a \
-	       $(LIBBSD) $(LIBWRAP) $(LIBNSL) $(LIBBLKID) $(LIBDL) $(LIBTIRPC)
+	       $(OPTLIBS) \
+	       $(LIBBSD) $(LIBWRAP) $(LIBNSL) $(LIBBLKID) $(LIBTIRPC)
 
 mountd_CPPFLAGS = $(AM_CPPFLAGS) $(CPPFLAGS) \
 		  -I$(top_builddir)/support/include \

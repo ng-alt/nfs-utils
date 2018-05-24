@@ -811,8 +811,12 @@ int start_statd(void)
 			switch (pid) {
 			case 0: /* child */
 				setgroups(0, NULL);
-				setgid(0);
-				setuid(0);
+				if (setgid(0) < 0)
+					nfs_error(_("%s: setgid(0) failed: %s"),
+						progname, strerror(errno));
+				if (setuid(0) < 0)
+					nfs_error(_("%s: setuid(0) failed: %s"),
+						progname, strerror(errno));
 				execle(START_STATD, START_STATD, NULL, envp);
 				exit(1);
 			case -1: /* error */
@@ -1308,9 +1312,14 @@ nfs_nfs_version(char *type, struct mount_options *options, struct nfs_version *v
 		if (!(version->minor = strtol(version_val, &cptr, 10)) && cptr == version_val)
 			goto ret_error;
 		version->v_mode = V_SPECIFIC;
-	} else if (version->major > 3 && *cptr == '\0')
-		version->v_mode = V_GENERAL;
-
+	} else if (version->major > 3 && *cptr == '\0') {
+		version_val = po_get(options, "minorversion");
+		if (version_val != NULL) {
+			version->minor = strtol(version_val, &cptr, 10);
+			version->v_mode = V_SPECIFIC;
+		} else 
+			version->v_mode = V_GENERAL;
+	}
 	if (*cptr != '\0')
 		goto ret_error;
 

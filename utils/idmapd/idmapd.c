@@ -169,7 +169,7 @@ static int
 flush_nfsd_cache(char *path, time_t now)
 {
 	int fd;
-	char stime[20];
+	char stime[32];
 
 	sprintf(stime, "%ld\n", now);
 	fd = open(path, O_RDWR);
@@ -196,7 +196,7 @@ flush_nfsd_idmap_cache(void)
 	return ret;
 }
 
-void usage(char *progname)
+static void usage(char *progname)
 {
 	fprintf(stderr, "Usage: %s [-hfvCS] [-p path] [-c path]\n",
 		basename(progname));
@@ -420,7 +420,7 @@ dirscancb(int UNUSED(fd), short UNUSED(which), void *data)
 	int nent, i;
 	struct dirent **ents;
 	struct idmap_client *ic, *nextic;
-	char path[PATH_MAX];
+	char path[PATH_MAX+256]; /* + sizeof(d_name) */
 	struct idmap_clientq *icq = data;
 
 	nent = scandir(pipefsdir, &ents, NULL, alphasort);

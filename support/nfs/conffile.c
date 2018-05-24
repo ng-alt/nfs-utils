@@ -49,6 +49,7 @@
 #include <errno.h>
 #include <err.h>
 #include <syslog.h>
+#include <libgen.h>
 
 #include "conffile.h"
 #include "xlog.h"
@@ -57,10 +58,10 @@
 
 static void conf_load_defaults(void);
 static char * conf_readfile(const char *path);
-static int conf_set(int , const char *, const char *, const char *, 
+static int conf_set(int , const char *, const char *, const char *,
 	const char *, int , int );
-static void conf_parse(int trans, char *buf, 
-	char **section, char **subsection);
+static void conf_parse(int trans, char *buf,
+	char **section, char **subsection, const char *filename);
 
 struct conf_trans {
 	TAILQ_ENTRY (conf_trans) link;
@@ -177,7 +178,7 @@ conf_remove_section_now(const char *section)
  * into SECTION of our configuration database.
  */
 static int
-conf_set_now(const char *section, const char *arg, const char *tag, 
+conf_set_now(const char *section, const char *arg, const char *tag,
 	const char *value, int override, int is_default)
 {
 	struct conf_binding *node = 0;
@@ -186,7 +187,7 @@ conf_set_now(const char *section, const char *arg, const char *tag,
 		conf_remove_now(section, tag);
 	else if (conf_get_section(section, arg, tag)) {
 		if (!is_default) {
-			xlog(LOG_INFO, "conf_set: duplicate tag [%s]:%s, ignoring...\n", 
+			xlog(LOG_INFO, "conf_set: duplicate tag [%s]:%s, ignoring...",
 				section, tag);
 		}
 		return 1;
@@ -206,21 +207,60 @@ conf_set_now(const char *section, const char *arg, const char *tag,
 	return 0;
 }
 
+/* Attempt to construct a relative path to the new file */
+static char *
+relative_path(const char *oldfile, const char *newfile)
+{
+	char *tmpcopy = NULL;
+	char *dir = NULL;
+	char *relpath = NULL;
+	size_t pathlen;
+
+	if (!newfile)
+		return strdup(oldfile);
+
+	if (newfile[0] == '/')
+		return strdup(newfile);
+
+	tmpcopy = strdup(oldfile);
+	if (!tmpcopy)
+		goto mem_err;
+
+	dir = dirname(tmpcopy);
+
+	pathlen = strlen(dir) + strlen(newfile) + 2;
+	relpath = calloc(1, pathlen);
+	if (!relpath)
+		goto mem_err;
+
+	snprintf(relpath, pathlen, "%s/%s", dir, newfile);
+
+	free(tmpcopy);
+	return relpath;
+mem_err:
+	if (tmpcopy)
+		free(tmpcopy);
+	return NULL;
+}
+
+
 /*
  * Parse the line LINE of SZ bytes.  Skip Comments, recognize section
  * headers and feed tag-value pairs into our configuration database.
  */
 static void
-conf_parse_line(int trans, char *line, int lineno, char **section, char **subsection)
+conf_parse_line(int trans, char *line, const char *filename, int lineno, char **section, char **subsection)
 {
 	char *val, *ptr;
+	char *inc_section = NULL, *inc_subsection = NULL;
+	char *relpath, *subconf;
 
 	/* Ignore blank lines */
 	if (*line == '\0')
 		return;
 
 	/* Strip off any leading blanks */
-	while (isblank(*line)) 
+	while (isblank(*line))
 		line++;
 
 	/* Lines starting with '#' or ';' are comments.  */
@@ -241,14 +281,15 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 		}
 
 		/* Strip off any blanks after '[' */
-		while (isblank(*line)) 
+		while (isblank(*line))
 			line++;
 
 		/* find the closing ] */
 		ptr = strchr(line, ']');
 		if (ptr == NULL) {
-			xlog_warn("config file error: line %d: "
- 				"non-matched ']', ignoring until next section", lineno);
+			xlog_warn("config error at %s:%d: "
+				  "non-matched ']', ignoring until next section",
+				  filename, lineno);
 			return;
 		}
 
@@ -256,7 +297,7 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 		*(ptr--) = '\0';
 
 		/* Strip off any blanks before ']' */
-		while (ptr >= line && isblank(*ptr)) 
+		while (ptr >= line && isblank(*ptr))
 			*(ptr--)='\0';
 
 		/* look for an arg to split from the section name */
@@ -273,24 +314,28 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 		/* copy the section name */
 		*section = strdup(line);
 		if (!*section) {
-			xlog_warn("conf_parse_line: %d: malloc failed", lineno);
+			xlog_warn("config error at %s:%d:"
+				  "malloc failed", filename, lineno);
 			return;
 		}
 
 		/* there is no arg, we are done */
-		if (val == NULL) return;
+		if (val == NULL) 
+			return;
 
 		/* check for the closing " */
 		ptr = strchr(val, '"');
 		if (ptr == NULL) {
-			xlog_warn("config file error: line %d: "
- 				"non-matched '\"', ignoring until next section", lineno);
+			xlog_warn("config error at %s:%d: "
+				  "non-matched '\"', ignoring until next section",
+				filename, lineno);
 			return;
 		}
 		*ptr = '\0';
 		*subsection = strdup(val);
-		if (!*subsection) 
-			xlog_warn("conf_parse_line: %d: malloc arg failed", lineno);
+		if (!*subsection)
+			xlog_warn("config error at %s:%d: "
+				  "malloc failed", filename, lineno);
 		return;
 	}
 
@@ -301,15 +346,17 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 	if (ptr == NULL) {
 		/* Other non-empty lines are weird.  */
 		if (line[strspn(line, " \t")])
-			xlog_warn("config file error: line %d: "
-				"line not empty and not an assignment", lineno);
+			xlog_warn("config error at %s:%d: "
+				"line not empty and not an assignment",
+				filename, lineno);
 		return;
 	}
 
 	/* If no section, we are ignoring the line.  */
 	if (!*section) {
-		xlog_warn("config file error: line %d: "
-			"ignoring line due to no section", lineno);
+		xlog_warn("config error at %s:%d: "
+			  "ignoring line not in a section",
+			  filename, lineno);
 		return;
 	}
 
@@ -326,8 +373,8 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 		val++;
 		ptr = strchr(val, '"');
 		if (ptr == NULL) {
-			xlog_warn("config file error: line %d: "
-				"unmatched quotes", lineno);
+			xlog_warn("config error at %s:%d: "
+				  "unmatched quotes",filename, lineno);
 			return;
 		}
 		*ptr = '\0';
@@ -336,8 +383,8 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 		val++;
 		ptr = strchr(val, '\'');
 		if (ptr == NULL) {
-			xlog_warn("config file error: line %d: "
-				"unmatched quotes", lineno);
+			xlog_warn("config error at %s:%d: "
+				  "unmatched quotes", filename, lineno);
 			return;
 		}
 		*ptr = '\0';
@@ -354,39 +401,52 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 	}
 
 	if (*line == '\0') {
-		xlog_warn("config file error: line %d: "
-			"missing tag in assignment", lineno);
+		xlog_warn("config error at %s:%d: "
+			  "missing tag in assignment", filename, lineno);
 		return;
 	}
 	if (*val == '\0') {
-		xlog_warn("config file error: line %d: "
-			"missing value in assignment", lineno);
+		xlog_warn("config error at %s:%d: "
+			  "missing value in assignment", filename, lineno);
 		return;
 	}
 
 	if (strcasecmp(line, "include")==0) {
 		/* load and parse subordinate config files */
-		char * subconf = conf_readfile(val);
+		relpath = relative_path(filename, val);
+		if (relpath == NULL) {
+			xlog_warn("config error at %s:%d: "
+				"error loading included config",
+				  filename, lineno);
+			return;
+		}
+
+		subconf = conf_readfile(relpath);
 		if (subconf == NULL) {
-			xlog_warn("config file error: line %d: "
-			"error loading included config", lineno);
+			xlog_warn("config error at %s:%d: "
+				"error loading included config",
+				  filename, lineno);
+			if (relpath)
+				free(relpath);
 			return;
 		}
 
 		/* copy the section data so the included file can inherit it
 		 * without accidentally changing it for us */
-		char * inc_section = NULL;
-		char * inc_subsection = NULL;
 		if (*section != NULL) {
 			inc_section = strdup(*section);
 			if (*subsection != NULL)
 				inc_subsection = strdup(*subsection);
 		}
 
-		conf_parse(trans, subconf, &inc_section, &inc_subsection);
+		conf_parse(trans, subconf, &inc_section, &inc_subsection, relpath);
 
-		if (inc_section) free(inc_section);
-		if (inc_subsection) free(inc_subsection);
+		if (inc_section)
+			free(inc_section);
+		if (inc_subsection)
+			free(inc_subsection);
+		if (relpath)
+			free(relpath);
 		free(subconf);
 	} else {
 		/* XXX Perhaps should we not ignore errors?  */
@@ -396,7 +456,7 @@ conf_parse_line(int trans, char *line, int lineno, char **section, char **subsec
 
 /* Parse the mapped configuration file.  */
 static void
-conf_parse(int trans, char *buf, char **section, char **subsection)
+conf_parse(int trans, char *buf, char **section, char **subsection, const char *filename)
 {
 	char *cp = buf;
 	char *bufend = NULL;
@@ -413,7 +473,7 @@ conf_parse(int trans, char *buf, char **section, char **subsection)
 			else {
 				*cp = '\0';
 				lineno++;
-				conf_parse_line(trans, line, lineno, section, subsection);
+				conf_parse_line(trans, line, filename, lineno, section, subsection);
 				line = cp + 1;
 			}
 		}
@@ -434,6 +494,11 @@ static char *
 conf_readfile(const char *path)
 {
 	struct stat sb;
+	if (!path) {
+		xlog_err("conf_readfile: no path given");
+		return NULL;
+	}
+
 	if ((stat (path, &sb) == 0) || (errno != ENOENT)) {
 		char *new_conf_addr = NULL;
 		size_t sz = sb.st_size;
@@ -463,7 +528,8 @@ conf_readfile(const char *path)
 		return new_conf_addr;
 	fail:
 		close(fd);
-		if (new_conf_addr) free(new_conf_addr);
+		if (new_conf_addr) 
+			free(new_conf_addr);
 	}
 	return NULL;
 }
@@ -490,7 +556,7 @@ static void conf_free_bindings(void)
 }
 
 /* Open the config file and map it into our address space, then parse it.  */
-static void
+static int
 conf_load_file(const char *conf_file)
 {
 	int trans;
@@ -500,7 +566,7 @@ conf_load_file(const char *conf_file)
 	conf_data = conf_readfile(conf_file);
 
 	if (conf_data == NULL)
-		return;
+		return 1;
 
 	/* Load default configuration values.  */
 	conf_load_defaults();
@@ -508,7 +574,7 @@ conf_load_file(const char *conf_file)
 	/* Parse config contents into the transaction queue */
 	char *section = NULL;
 	char *subsection = NULL;
-	conf_parse(trans, conf_data, &section, &subsection);
+	conf_parse(trans, conf_data, &section, &subsection, conf_file);
 	if (section) free(section);
 	if (subsection) free(subsection);
 	free(conf_data);
@@ -518,10 +584,10 @@ conf_load_file(const char *conf_file)
 
 	/* Apply the new configuration values */
 	conf_end(trans, 1);
-	return;
+	return 0;
 }
 
-void
+int
 conf_init_file(const char *conf_file)
 {
 	unsigned int i;
@@ -532,11 +598,11 @@ conf_init_file(const char *conf_file)
 	TAILQ_INIT (&conf_trans_queue);
 
 	if (conf_file == NULL) conf_file=NFS_CONFFILE;
-	conf_load_file(conf_file);
+	return conf_load_file(conf_file);
 }
 
-/* 
- * Empty the config and free up any used memory 
+/*
+ * Empty the config and free up any used memory
  */
 void
 conf_cleanup(void)
@@ -618,7 +684,7 @@ conf_match_num(const char *section, const char *tag, int x)
 		xlog(LOG_INFO, "conf_match_num: %s:%s %d==%d?", section, tag, val, x);
 		return x == val;
 	case 3:
-		xlog(LOG_INFO, "conf_match_num: %s:%s %d<=%d<=%d?", section, 
+		xlog(LOG_INFO, "conf_match_num: %s:%s %d<=%d<=%d?", section,
 			tag, min, x, max);
 		return min <= x && max >= x;
 	default:
@@ -642,7 +708,7 @@ char *
 conf_get_str_with_def(const char *section, const char *tag, char *def)
 {
 	char * result = conf_get_section(section, NULL, tag);
-	if (!result) 
+	if (!result)
 		return def;
 	return result;
 }
@@ -659,7 +725,7 @@ retry:
 	for (; cb; cb = LIST_NEXT (cb, link)) {
 		if (strcasecmp(section, cb->section) != 0)
 			continue;
-		if (arg && strcasecmp(arg, cb->arg) != 0)
+		if (arg && (cb->arg == NULL || strcasecmp(arg, cb->arg) != 0))
 			continue;
 		if (strcasecmp(tag, cb->tag) != 0)
 			continue;
@@ -917,6 +983,8 @@ conf_set(int transaction, const char *section, const char *arg,
 fail:
 	if (node->tag)
 		free(node->tag);
+	if (node->arg)
+		free(node->arg);
 	if (node->section)
 		free(node->section);
 	if (node)
@@ -987,8 +1055,8 @@ conf_end(int transaction, int commit)
 			if (commit) {
 				switch (node->op) {
 				case CONF_SET:
-					conf_set_now(node->section, node->arg, 
-						node->tag, node->value, node->override, 
+					conf_set_now(node->section, node->arg,
+						node->tag, node->value, node->override,
 						node->is_default);
 					break;
 				case CONF_REMOVE:
@@ -1004,6 +1072,8 @@ conf_end(int transaction, int commit)
 			TAILQ_REMOVE (&conf_trans_queue, node, link);
 			if (node->section)
 				free(node->section);
+			if (node->arg)
+				free(node->arg);
 			if (node->tag)
 				free(node->tag);
 			if (node->value)
@@ -1019,117 +1089,234 @@ conf_end(int transaction, int commit)
  * Configuration is "stored in reverse order", so reverse it again.
  */
 struct dumper {
-	char *s, *v;
+	char *section;
+	char *arg;
+	char *tag;
+	char *value;
 	struct dumper *next;
 };
 
-static void
-conf_report_dump(struct dumper *node)
+/*
+ * Test if two nodes belong to the same (sub)sections
+ */
+static int
+dumper_section_compare(const struct dumper *nodea, const struct dumper *nodeb)
 {
-	/* Recursive, cleanup when we're done.  */
-	if (node->next)
-		conf_report_dump(node->next);
+	int ret;
 
-	if (node->v)
-		xlog(LOG_INFO, "%s=\t%s", node->s, node->v);
-	else if (node->s) {
-		xlog(LOG_INFO, "%s", node->s);
-		if (strlen(node->s) > 0)
-			free(node->s);
-	}
+	/* missing node, shouldnt happen */
+	if (!nodea || !nodeb)
+		return -1;
 
-	free (node);
+	/* no section names at all, they are equal */
+	if (!nodea->section && !nodeb->section)
+		return 0;
+
+	/* if only one has a section name, the blank one goes first */
+	if (!nodea->section && nodeb->section)
+		return -1;
+
+	if (nodea->section && !nodeb->section)
+		return 1;
+
+	/* both have section names, but do they match */
+	ret = strcmp(nodea->section, nodeb->section);
+
+	/* section names differ, that was easy */
+	if (ret != 0)
+		return ret;
+
+	/* sections matched, but how about sub-sections,
+	 * again, if only one has a value the blank goes first
+	 */
+	if (!nodea->arg && nodeb->arg)
+		return -1;
+
+	if (nodea->arg && !nodeb->arg)
+		return  1;
+
+	/* both have sub-section args and they differ */
+	if (nodea->arg && nodeb->arg
+	&& (ret=strcmp(nodea->arg, nodeb->arg))!=0)
+		return ret;
+
+	return 0;
 }
 
-void
-conf_report (void)
+/* If a string starts or ends with a space it should be quoted */
+static bool
+should_escape(const char *text)
 {
-	struct conf_binding *cb, *last = 0;
-	unsigned int i, len, diff_arg = 0;
-	char *current_section = (char *)0;
-	char *current_arg = (char *)0;
-	struct dumper *dumper, *dnode;
+	int len;
 
-	dumper = dnode = (struct dumper *)calloc(1, sizeof *dumper);
-	if (!dumper)
-		goto mem_fail;
+	/* no string, no escaping needed */
+	if (!text)
+		return false;
+
+	/* first character is a space */
+	if (isspace(text[0]))
+		return true;
+
+	/* last character is a space */
+	len = strlen(text);
+	if (isspace(text[len-1]))
+		return true;
+
+	return false;
+}
+
+static void
+conf_report_dump_text(struct dumper *head, FILE *ff)
+{
+	const struct dumper *node = head;
+	const struct dumper *last = NULL;
+
+	for (node=head; node!=NULL; node=node->next) {
+		/* starting a new section, print the section header */
+		if (dumper_section_compare(last, node)!=0) {
+			if (node != head)
+				fprintf(ff, "\n");
+			if (node->arg)
+				fprintf(ff, "[%s \"%s\"]\n", node->section, node->arg);
+			else
+				fprintf(ff, "[%s]\n", node->section);
+		}
+
+		/* now print the tag and its value */
+		fprintf(ff, " %s", node->tag);
+		if (node->value) {
+			if (should_escape(node->value))
+				fprintf(ff, " = \"%s\"", node->value);
+			else
+				fprintf(ff, " = %s", node->value);
+		}
+		fprintf(ff, "\n");
+
+		last = node;
+	}
+}
+
+/* sort by tag compare function */
+static int
+dumper_compare(const void *a, const void *b)
+{
+	const struct dumper *nodea = *(struct dumper **)a;
+	const struct dumper *nodeb = *(struct dumper **)b;
+	int ret;
+
+	/* missing node, shouldnt happen */
+	if (!nodea || !nodeb)
+		return -1;
+
+	/* are the two nodes in different (sub)sections */
+	ret = dumper_section_compare(nodea, nodeb);
+	if (ret != 0)
+		return ret;
+
+	/* sub-sections match (both blank, or both same)
+	 * so we compare the tag names
+	 */
+
+	/* blank tags shouldnt happen, but paranoia */
+	if (!nodea->tag && !nodeb->tag)
+		return  0;
+
+	/* still shouldnt happen, but use the blank-goes-first logic */
+	if (!nodea->tag &&  nodeb->tag)
+		return -1;
+	if ( nodea->tag && !nodeb->tag)
+		return  1;
+
+	/* last test, compare the tags directly */
+	ret = strcmp(nodea->tag, nodeb->tag);
+	return ret;
+}
+
+/* sort all of the report nodes */
+static struct dumper *
+conf_report_sort(struct dumper *start)
+{
+	struct dumper **list;
+	struct dumper *node;
+	unsigned int count = 0;
+	unsigned int i=0;
+
+	/* how long is this list */
+	for (node=start; node!=NULL; node=node->next)
+		count++;
+
+	/* no need to sort a list with less than 2 items */
+	if (count < 2)
+		return start;
+
+	/* build an array of all the nodes */
+	list = calloc(count, sizeof(struct dumper *));
+	if (!list)
+		goto mem_err;
+
+	for (node=start,i=0; node!=NULL; node=node->next) {
+		list[i++] = node;
+	}
+
+	/* sort the array alphabetically by section and tag */
+	qsort(list, count, sizeof(struct dumper *), dumper_compare);
+
+	/* rebuild the linked list in sorted order */
+	for (i=0; i<count-1; i++) {
+		list[i]->next = list[i+1];
+	}
+	list[count-1]->next = NULL;
+
+	/* remember the new head of list and discard the sorting array */
+	node = list[0];
+	free(list);
+
+	/* return the new head of list */
+	return node;
+
+mem_err:
+	free(list);
+	return NULL;
+}
+
+/* Output a copy of the current configuration to file */
+void
+conf_report(FILE *outfile)
+{
+	struct conf_binding *cb = NULL;
+	unsigned int i;
+	struct dumper *dumper = NULL, *dnode = NULL;
 
 	xlog(LOG_INFO, "conf_report: dumping running configuration");
 
-	for (i = 0; i < sizeof conf_bindings / sizeof conf_bindings[0]; i++)
+	/* build a linked list of all the config nodes */
+	for (i = 0; i < sizeof conf_bindings / sizeof conf_bindings[0]; i++) {
 		for (cb = LIST_FIRST(&conf_bindings[i]); cb; cb = LIST_NEXT(cb, link)) {
-			if (!cb->is_default) {
-				/* Make sure the Section arugment is the same */
-				if (current_arg && current_section && cb->arg) {
-					if (strcmp(cb->section, current_section) == 0 &&
-						strcmp(cb->arg, current_arg) != 0)
-					diff_arg = 1;
-				}
-				/* Dump this entry.  */
-				if (!current_section || strcmp(cb->section, current_section) 
-							|| diff_arg) {
-					if (current_section || diff_arg) {
-						len = strlen (current_section) + 3;
-						if (current_arg)
-							len += strlen(current_arg) + 3;
-						dnode->s = malloc(len);
-						if (!dnode->s)
-							goto mem_fail;
+			struct dumper *newnode = calloc(1, sizeof (struct dumper));
+			if (!newnode)
+				goto mem_fail;
 
-						if (current_arg)
-							snprintf(dnode->s, len, "[%s \"%s\"]", 
-								current_section, current_arg);
-						else
-							snprintf(dnode->s, len, "[%s]", current_section);
+			newnode->next = dumper;
+			dumper = newnode;
 
-						dnode->next = 
-							(struct dumper *)calloc(1, sizeof (struct dumper));
-						dnode = dnode->next;
-						if (!dnode)
-							goto mem_fail;
-
-						dnode->s = "";
-						dnode->next = 
-							(struct dumper *)calloc(1, sizeof (struct dumper));
-						dnode = dnode->next;
-						if (!dnode)
-						goto mem_fail;
-					}
-					current_section = cb->section;
-					current_arg = cb->arg;
-					diff_arg = 0;
-				}
-				dnode->s = cb->tag;
-				dnode->v = cb->value;
-				dnode->next = (struct dumper *)calloc (1, sizeof (struct dumper));
-				dnode = dnode->next;
-				if (!dnode)
-					goto mem_fail;
-				last = cb;
+			newnode->section = cb->section;
+			newnode->arg = cb->arg;
+			newnode->tag = cb->tag;
+			newnode->value = cb->value;
 		}
 	}
 
-	if (last) {
-		len = strlen(last->section) + 3;
-		if (last->arg)
-			len += strlen(last->arg) + 3;
-		dnode->s = malloc(len);
-		if (!dnode->s)
-			goto mem_fail;
-		if (last->arg)
-			snprintf(dnode->s, len, "[%s \"%s\"]", last->section, last->arg);
-		else
-			snprintf(dnode->s, len, "[%s]", last->section);
-	}
-	conf_report_dump(dumper);
-	return;
+	/* sort the list then print it */
+	dumper = conf_report_sort(dumper);
+	conf_report_dump_text(dumper, outfile);
+	goto cleanup;
 
 mem_fail:
 	xlog_warn("conf_report: malloc/calloc failed");
+cleanup:
+	/* traverse the linked list freeing all the nodes */
 	while ((dnode = dumper) != 0) {
 		dumper = dumper->next;
-		if (dnode->s)
-			free(dnode->s);
 		free(dnode);
 	}
 	return;

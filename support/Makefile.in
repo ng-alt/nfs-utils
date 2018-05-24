@@ -88,6 +88,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 @CONFIG_NFSV4_TRUE@am__append_1 = nfsidmap
+@CONFIG_JUNCTION_TRUE@am__append_2 = junction
 subdir = support
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
@@ -100,6 +101,7 @@ am__aclocal_m4_deps = $(top_srcdir)/aclocal/bsdsignals.m4 \
 	$(top_srcdir)/aclocal/libpthread.m4 \
 	$(top_srcdir)/aclocal/libsqlite3.m4 \
 	$(top_srcdir)/aclocal/libtirpc.m4 \
+	$(top_srcdir)/aclocal/libxml2.m4 \
 	$(top_srcdir)/aclocal/nfs-utils.m4 \
 	$(top_srcdir)/aclocal/rpcsec_vers.m4 \
 	$(top_srcdir)/aclocal/tcp-wrappers.m4 \
@@ -165,7 +167,7 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-DIST_SUBDIRS = export include misc nfs nsm nfsidmap
+DIST_SUBDIRS = export include misc nfs nsm nfsidmap junction
 am__DIST_COMMON = $(srcdir)/Makefile.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
@@ -258,7 +260,6 @@ LIBBLKID = @LIBBLKID@
 LIBBSD = @LIBBSD@
 LIBCAP = @LIBCAP@
 LIBCRYPT = @LIBCRYPT@
-LIBDL = @LIBDL@
 LIBEVENT = @LIBEVENT@
 LIBKEYUTILS = @LIBKEYUTILS@
 LIBMOUNT = @LIBMOUNT@
@@ -271,6 +272,7 @@ LIBSQLITE = @LIBSQLITE@
 LIBTIRPC = @LIBTIRPC@
 LIBTOOL = @LIBTOOL@
 LIBWRAP = @LIBWRAP@
+LIBXML2 = @LIBXML2@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
@@ -377,7 +379,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 unitdir = @unitdir@
-OPTDIRS = $(am__append_1)
+OPTDIRS = $(am__append_1) $(am__append_2)
 SUBDIRS = export include misc nfs nsm $(OPTDIRS)
 MAINTAINERCLEANFILES = Makefile.in
 all: all-recursive

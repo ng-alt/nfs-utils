@@ -300,7 +300,7 @@ int versions[] = {
 	PRNT_V4
 };
 
-void usage(char *name)
+static void usage(char *name)
 {
 	printf("Usage: %s [OPTION]...\n\
 \n\
@@ -980,8 +980,10 @@ more_stats:
 			}
 			bufp = buf;
 			for (; curindex < numvals; curindex++) {
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 				n = sscanf(bufp, fmt, &ip->valptr[curindex],
 						&numconsumed);
+#pragma GCC diagnostic warning "-Wformat-nonliteral"
 				if (n != 1)
 					break;
 				if (is_proc) {
