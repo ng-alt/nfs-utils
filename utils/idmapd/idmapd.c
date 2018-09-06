@@ -310,7 +310,7 @@ main(int argc, char **argv)
 	if (!serverstart && !clientstart)
 		errx(1, "it is illegal to specify both -C and -S");
 
-	strncat(pipefsdir, "/nfs", sizeof(pipefsdir));
+	strncat(pipefsdir, "/nfs", sizeof(pipefsdir)-1);
 
 	daemon_init(fg);
 
@@ -923,7 +923,8 @@ static int
 getfield(char **bpp, char *fld, size_t fldsz)
 {
 	char *bp;
-	int val, n;
+	unsigned int val; 
+	int n;
 
 	while ((bp = strsep(bpp, " ")) != NULL && bp[0] == '\0')
 		;

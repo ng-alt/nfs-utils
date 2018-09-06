@@ -434,6 +434,7 @@ static int
 change_identity(uid_t uid)
 {
 	struct passwd	*pw;
+	int res;
 
 	/* drop list of supplimentary groups first */
 	if (syscall(SYS_setgroups, 0, 0) != 0) {
@@ -459,14 +460,23 @@ change_identity(uid_t uid)
 	 * send a signal to all other threads to synchronize the uid in all
 	 * other threads. To bypass this, we have to call syscall() directly.
 	 */
-	if (syscall(SYS_setresgid, pw->pw_gid, pw->pw_gid, pw->pw_gid) != 0) {
+#ifdef __NR_setresgid32
+	res = syscall(SYS_setresgid32, pw->pw_gid, pw->pw_gid, pw->pw_gid);
+#else 
+	res = syscall(SYS_setresgid, pw->pw_gid, pw->pw_gid, pw->pw_gid);
+#endif
+	if (res != 0) {
 		printerr(0, "WARNING: failed to set gid to %u!\n", pw->pw_gid);
 		return errno;
 	}
 
-	if (syscall(SYS_setresuid, uid, uid, uid) != 0) {
-		printerr(0, "WARNING: Failed to setuid for user with uid %u\n",
-				uid);
+#ifdef __NR_setresuid32
+	res = syscall(SYS_setresuid32, uid, uid, uid);
+#else 
+	res = syscall(SYS_setresuid, uid, uid, uid);
+#endif
+	if (res != 0) {
+		printerr(0, "WARNING: Failed to setuid for user with uid %u\n", uid);
 		return errno;
 	}
 
@@ -520,8 +530,9 @@ out:
 }
 
 static AUTH *
-krb5_use_machine_creds(struct clnt_info *clp, uid_t uid, char *tgtname,
-		    char *service, CLIENT **rpc_clnt)
+krb5_use_machine_creds(struct clnt_info *clp, uid_t uid,
+		       char *srchost, char *tgtname, char *service,
+		       CLIENT **rpc_clnt)
 {
 	AUTH	*auth = NULL;
 	char	**credlist = NULL;
@@ -534,7 +545,7 @@ krb5_use_machine_creds(struct clnt_info *clp, uid_t uid, char *tgtname,
 
 	do {
 		gssd_refresh_krb5_machine_credential(clp->servername, NULL,
-						service);
+						     service, srchost);
 	/*
 	 * Get a list of credential cache names and try each
 	 * of them until one works or we've tried them all
@@ -594,8 +605,8 @@ out:
  * context on behalf of the kernel
  */
 static void
-process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
-		    char *service)
+process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *srchost,
+		    char *tgtname, char *service)
 {
 	CLIENT			*rpc_clnt = NULL;
 	AUTH			*auth = NULL;
@@ -643,7 +654,7 @@ process_krb5_upcall(struct clnt_info *clp, uid_t uid, int fd, char *tgtname,
 	if (auth == NULL) {
 		if (uid == 0 && (root_uses_machine_creds == 1 ||
 				service != NULL)) {
-			auth =	krb5_use_machine_creds(clp, uid, tgtname,
+			auth =	krb5_use_machine_creds(clp, uid, srchost, tgtname,
 							service, &rpc_clnt);
 			if (auth == NULL)
 				goto out_return_error;
@@ -714,7 +725,7 @@ handle_krb5_upcall(struct clnt_upcall_info *info)
 
 	printerr(2, "\n%s: uid %d (%s)\n", __func__, info->uid, clp->relpath);
 
-	process_krb5_upcall(clp, info->uid, clp->krb5_fd, NULL, NULL);
+	process_krb5_upcall(clp, info->uid, clp->krb5_fd, NULL, NULL, NULL);
 	free(info);
 }
 
@@ -728,11 +739,12 @@ handle_gssd_upcall(struct clnt_upcall_info *info)
 	char			*uidstr = NULL;
 	char			*target = NULL;
 	char			*service = NULL;
+	char			*srchost = NULL;
 	char			*enctypes = NULL;
 	char			*upcall_str;
 	char			*pbuf = info->lbuf;
 
-	printerr(2, "\n%s: '%s' (%s)\n", __func__, info->lbuf, clp->relpath);
+	printerr(2, "%s: '%s' (%s)\n", __func__, info->lbuf, clp->relpath);
 
 	upcall_str = strdup(info->lbuf);
 	if (upcall_str == NULL) {
@@ -751,6 +763,8 @@ handle_gssd_upcall(struct clnt_upcall_info *info)
 			target = p + strlen("target=");
 		else if (!strncmp(p, "service=", strlen("service=")))
 			service = p + strlen("service=");
+		else if (!strncmp(p, "srchost=", strlen("srchost=")))
+			srchost = p + strlen("srchost=");
 	}
 
 	if (!mech || strlen(mech) < 1) {
@@ -802,7 +816,7 @@ handle_gssd_upcall(struct clnt_upcall_info *info)
 	}
 
 	if (strcmp(mech, "krb5") == 0 && clp->servername)
-		process_krb5_upcall(clp, uid, clp->gssd_fd, target, service);
+		process_krb5_upcall(clp, uid, clp->gssd_fd, srchost, target, service);
 	else {
 		if (clp->servername)
 			printerr(0, "WARNING: handle_gssd_upcall: "
@@ -815,4 +829,3 @@ out_nomem:
 	free(info);
 	return;
 }
-

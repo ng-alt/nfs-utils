@@ -28,6 +28,25 @@ nfsconf \- Query various NFS configuration settings
 .IR subsection ]
 .IR section
 .IR tag
+.P
+.B nfsconf \-\-set
+.RB [ \-v | \-\-verbose ]
+.RB [ \-f | \-\-file
+.IR infile.conf ]
+.RB [ \-a | \-\-arg
+.IR subsection ]
+.IR section
+.IR tag
+.IR value
+.P
+.B nfsconf \-\-unset
+.RB [ \-v | \-\-verbose ]
+.RB [ \-f | \-\-file
+.IR infile.conf ]
+.RB [ \-a | \-\-arg
+.IR subsection ]
+.IR section
+.IR tag
 .SH DESCRIPTION
 The
 .B nfsconf
@@ -41,6 +60,10 @@ Output an alphabetically sorted dump of the current configuration in conf file f
 Test if a specific tag has a value set.
 .IP "\fB\-g, \-\-get\fP"
 Output the current value of the specified tag.
+.IP "\fB\-s, \-\-set\fP"
+Update or Add a tag and value to the config file, creating the file if necessary.
+.IP "\fB\-u, \-\-unset\fP"
+Remove the specified tag and its value from the config file.
 .SH OPTIONS
 .SS Options valid in all modes
 .TP
@@ -56,7 +79,7 @@ Select a different config file to operate upon, default is
 Select a specific sub-section
 .SH EXIT STATUS
 .SS \fB\-\-isset\fR mode
-In this mode the command will return success (0) if the selected tag has a value, any other exit code indicates the value is not set, or some other error has occured.
+In this mode the command will return success (0) if the selected tag has a value, any other exit code indicates the value is not set, or some other error has occurred.
 .SS all other modes
 Success is indicated by an exit status of zero, any other status indicates an error. Error messages are output on stderr, and increasing verbosity will give more detailed explanations if any are available.
 .SH EXAMPLES
@@ -64,11 +87,14 @@ Success is indicated by an exit status of zero, any other status indicates an er
 .B nfsconf -v --dump --file /tmp/testconf.conf  sorted.conf
 Check a new config file for syntax errors and output a sorted version for ease of comparison with existing settings.
 .TP
-.B if ! nfsconf --isset gssd preferred-realm ; then echo 'No prefered realm configured for gss'; fi
+.B if ! nfsconf --isset gssd preferred-realm ; then echo 'No preferred realm configured for gss'; fi
 The tool allows for easy testing of configuration values from shell scripts, here we test if a specific value has been set.
 .TP
 .B nfsconf --file /etc/nfsmount.conf --get --arg /home MountPoint background
 Show default value for \fIbackground\fR option for NFS mounts of the \fI/home\fR path.
+.TP
+.B nfsconf --file /etc/nfs.conf --set nfsd debug 1
+Enable debugging in nfsd
 .SH FILES
 .TP
 .B /etc/nfs.conf

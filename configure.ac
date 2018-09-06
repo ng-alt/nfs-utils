@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-AC_INIT([linux nfs-utils],[2.3.2],[linux-nfs@vger.kernel.org],[nfs-utils])
+AC_INIT([linux nfs-utils],[2.3.3],[linux-nfs@vger.kernel.org],[nfs-utils])
 AC_CANONICAL_BUILD([])
 AC_CANONICAL_HOST([])
 AC_CONFIG_MACRO_DIR(aclocal)
@@ -157,7 +157,7 @@ AC_ARG_WITH(rpcgen,
 	    RPCGEN_PATH=$rpcgen_path
 	fi
 	AC_SUBST(RPCGEN_PATH)
-	AM_CONDITIONAL(CONFIG_RPCGEN, [test "$RPCGEN_PATH" = ""])
+	AM_CONDITIONAL(CONFIG_RPCGEN, [test "$RPCGEN_PATH" = "internal"])
 AC_ARG_ENABLE(uuid,
 	[AC_HELP_STRING([--disable-uuid], 
 		[Exclude uuid support to avoid buggy libblkid. @<:@default=no@:>@])],
