@@ -121,7 +121,8 @@ am__v_AR_1 =
 libmisc_a_AR = $(AR) $(ARFLAGS)
 libmisc_a_LIBADD =
 am_libmisc_a_OBJECTS = tcpwrapper.$(OBJEXT) from_local.$(OBJEXT) \
-	mountpoint.$(OBJEXT) file.$(OBJEXT)
+	mountpoint.$(OBJEXT) file.$(OBJEXT) nfsd_path.$(OBJEXT) \
+	workqueue.$(OBJEXT) xstat.$(OBJEXT)
 libmisc_a_OBJECTS = $(am_libmisc_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -139,7 +140,9 @@ DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)/support/include
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/file.Po ./$(DEPDIR)/from_local.Po \
-	./$(DEPDIR)/mountpoint.Po ./$(DEPDIR)/tcpwrapper.Po
+	./$(DEPDIR)/mountpoint.Po ./$(DEPDIR)/nfsd_path.Po \
+	./$(DEPDIR)/tcpwrapper.Po ./$(DEPDIR)/workqueue.Po \
+	./$(DEPDIR)/xstat.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -379,7 +382,9 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 unitdir = @unitdir@
 noinst_LIBRARIES = libmisc.a
-libmisc_a_SOURCES = tcpwrapper.c from_local.c mountpoint.c file.c
+libmisc_a_SOURCES = tcpwrapper.c from_local.c mountpoint.c file.c \
+		    nfsd_path.c workqueue.c xstat.c
+
 MAINTAINERCLEANFILES = Makefile.in
 all: all-am
 
@@ -432,7 +437,10 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/file.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/from_local.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mountpoint.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nfsd_path.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tcpwrapper.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/workqueue.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xstat.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -596,7 +604,10 @@ distclean: distclean-am
 		-rm -f ./$(DEPDIR)/file.Po
 	-rm -f ./$(DEPDIR)/from_local.Po
 	-rm -f ./$(DEPDIR)/mountpoint.Po
+	-rm -f ./$(DEPDIR)/nfsd_path.Po
 	-rm -f ./$(DEPDIR)/tcpwrapper.Po
+	-rm -f ./$(DEPDIR)/workqueue.Po
+	-rm -f ./$(DEPDIR)/xstat.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -645,7 +656,10 @@ maintainer-clean: maintainer-clean-am
 		-rm -f ./$(DEPDIR)/file.Po
 	-rm -f ./$(DEPDIR)/from_local.Po
 	-rm -f ./$(DEPDIR)/mountpoint.Po
+	-rm -f ./$(DEPDIR)/nfsd_path.Po
 	-rm -f ./$(DEPDIR)/tcpwrapper.Po
+	-rm -f ./$(DEPDIR)/workqueue.Po
+	-rm -f ./$(DEPDIR)/xstat.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

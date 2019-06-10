@@ -658,7 +658,6 @@ RPCSECGSS_LIBS
 RPCSECGSS_CFLAGS
 GSSGLUE_LIBS
 GSSGLUE_CFLAGS
-LIBPTHREAD
 GSSKRB_LIBS
 GSSKRB_CFLAGS
 K5VERS
@@ -680,6 +679,7 @@ CONFIG_NFSDCLD_TRUE
 LIBSQLITE
 LIBKEYUTILS
 LIBEVENT
+LIBPTHREAD
 LIBNSL
 CC_FOR_BUILD
 CXXCPP
@@ -19173,6 +19173,93 @@ if test "x$ac_cv_lib_crypt_crypt" = xyes; then :
 fi
 
 
+for ac_header in sched.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "sched.h" "ac_cv_header_sched_h" "$ac_includes_default"
+if test "x$ac_cv_header_sched_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_SCHED_H 1
+_ACEOF
+
+fi
+
+done
+
+for ac_func in unshare fstatat statx
+do :
+  as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
+ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+done
+
+
+
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for pthread_create in -lpthread" >&5
+$as_echo_n "checking for pthread_create in -lpthread... " >&6; }
+if ${ac_cv_lib_pthread_pthread_create+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpthread  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char pthread_create ();
+int
+main ()
+{
+return pthread_create ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_pthread_pthread_create=yes
+else
+  ac_cv_lib_pthread_pthread_create=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pthread_pthread_create" >&5
+$as_echo "$ac_cv_lib_pthread_pthread_create" >&6; }
+if test "x$ac_cv_lib_pthread_pthread_create" = xyes; then :
+
+$as_echo "#define HAVE_LIBPTHREAD 1" >>confdefs.h
+
+		for ac_header in pthread.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "pthread.h" "ac_cv_header_pthread_h" "$ac_includes_default"
+if test "x$ac_cv_header_pthread_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_PTHREAD_H 1
+_ACEOF
+
+else
+  as_fn_error $? "libpthread headers not found." "$LINENO" 5
+fi
+
+done
+
+		 LIBPTHREAD=-lpthread
+
+fi
+
+
+
+
 if test "$enable_nfsv4" = yes; then
 
 
@@ -20224,14 +20311,10 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pthread_pthread_create" >&5
 $as_echo "$ac_cv_lib_pthread_pthread_create" >&6; }
 if test "x$ac_cv_lib_pthread_pthread_create" = xyes; then :
-  LIBPTHREAD=-lpthread
-else
-  as_fn_error $? "libpthread not found." "$LINENO" 5
-fi
 
+$as_echo "#define HAVE_LIBPTHREAD 1" >>confdefs.h
 
-
-  for ac_header in pthread.h
+		for ac_header in pthread.h
 do :
   ac_fn_c_check_header_mongrel "$LINENO" "pthread.h" "ac_cv_header_pthread_h" "$ac_includes_default"
 if test "x$ac_cv_header_pthread_h" = xyes; then :
@@ -20244,6 +20327,12 @@ else
 fi
 
 done
+
+		 LIBPTHREAD=-lpthread
+
+else
+  as_fn_error $? "libpthread not found." "$LINENO" 5
+fi
 
 
 

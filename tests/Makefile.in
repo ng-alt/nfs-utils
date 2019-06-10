@@ -116,7 +116,8 @@ am_statdb_dump_OBJECTS = statdb_dump.$(OBJEXT)
 statdb_dump_OBJECTS = $(am_statdb_dump_OBJECTS)
 am__DEPENDENCIES_1 =
 statdb_dump_DEPENDENCIES = ../support/nfs/.libs/libnfs.a \
-	../support/nsm/libnsm.a $(am__DEPENDENCIES_1)
+	../support/nsm/libnsm.a ../support/misc/libmisc.a \
+	$(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -619,7 +620,8 @@ top_srcdir = @top_srcdir@
 unitdir = @unitdir@
 statdb_dump_SOURCES = statdb_dump.c
 statdb_dump_LDADD = ../support/nfs/.libs/libnfs.a \
-		    ../support/nsm/libnsm.a $(LIBCAP)
+		    ../support/nsm/libnsm.a \
+		    ../support/misc/libmisc.a $(LIBCAP)
 
 SUBDIRS = nsm_client
 MAINTAINERCLEANFILES = Makefile.in
